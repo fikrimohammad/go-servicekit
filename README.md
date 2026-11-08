@@ -81,7 +81,7 @@ via its `replace` directives.
 
 ## Versioning
 
-All modules share one version, set in `VERSION` (currently `v0.1.0`). Every
+All modules share one version, set in `VERSION` (currently `v0.1.1`). Every
 sibling `require` must equal it, and CI checks this. Each release tags every
 module as `<module>/<version>`. All modules are in development (v0), so any
 release may break the API. Never reuse a version: fix a bad release forward
