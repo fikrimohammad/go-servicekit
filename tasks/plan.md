@@ -109,10 +109,10 @@ Details, acceptance criteria, and verification are in [todo.md](todo.md).
 - [x] T21: `nats/consumer` sample
 
 ### Checkpoint C: kit complete
-- [ ] `setup.sh <sample>` works for all six; each done command fails on its
+- [x] `setup.sh <sample>` works for all six; each done command fails on its
       untouched fixture
-- [ ] The protocol, correction log, and prompts are self-contained
-- [ ] The CI doc-contracts job is green on the PR
+- [x] The protocol, correction log, and prompts are self-contained
+- [x] The CI doc-contracts job is green on the PR
 
 ### Phase 4: Proof
 - [ ] T22: Fresh-agent dry run; record kit defects
