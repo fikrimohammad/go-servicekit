@@ -161,6 +161,10 @@ printf '\n| Dead | `github.com/example/m/gone` | Gone |\n' >>"$tree/README.md"
 expect_fail "dead import-map row" "which is not a public package"
 
 new_tree
+printf 'go 1.26.5\n' >"$tree/m/go.mod"
+expect_fail "go list failure stops discovery" "discovery failed"
+
+new_tree
 expect_fail "unknown import path" "not a public package" github.com/example/m/nope
 
 printf '%d passed, %d failed\n' "$passed" "$failed"

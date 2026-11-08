@@ -83,10 +83,12 @@ is_doc_only() {
 
 # Discover every public package. Internal and test-only packages are skipped.
 declare -A dir_of=() name_of=()
+discovery_failed=0
 while IFS= read -r mod; do
   if ! listing=$(cd "$mod" && GOWORK=off go list \
     -f '{{.ImportPath}}|{{.Dir}}|{{.Name}}|{{join .GoFiles ","}}' ./... 2>&1); then
     fail "${mod#"$ROOT"/}: go list failed: $listing"
+    discovery_failed=1
     continue
   fi
   while IFS='|' read -r path dir name gofiles; do
@@ -99,6 +101,11 @@ while IFS= read -r mod; do
     name_of["$path"]=$name
   done <<<"$listing"
 done < <(find "$ROOT" -maxdepth 2 -name go.mod -not -path '*/vendor/*' -printf '%h\n' | sort)
+
+if [ "$discovery_failed" -ne 0 ]; then
+  printf 'doc contracts: discovery failed; fix go list errors first\n' >&2
+  exit 1
+fi
 
 if [ "${#dir_of[@]}" -eq 0 ]; then
   fail "no public packages found under $ROOT"
