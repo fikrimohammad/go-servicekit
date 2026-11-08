@@ -35,5 +35,8 @@ while IFS= read -r modfile; do
   (cd "$work" && GOWORK=off go mod edit -replace "$module=$root/$dir")
 done < <(find "$root" -maxdepth 2 -name go.mod -not -path '*/vendor/*' | sort)
 
-(cd "$work" && GOWORK=off go mod download)
+# Tidy so the fixture's build list (indirect requirements and go.sum) matches
+# the local replaces. Fixtures must reference their SDK package, even in the
+# stub, or tidy removes the requirement.
+(cd "$work" && GOWORK=off go mod tidy)
 printf '%s\n' "$work"
