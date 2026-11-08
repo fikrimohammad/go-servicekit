@@ -1,6 +1,3 @@
-// Package producer publishes messages to NATS JetStream streams. A [Producer]
-// owns the stream of each registered topic and sends messages synchronously,
-// delayed through message schedules, or asynchronously.
 package producer
 
 import (
