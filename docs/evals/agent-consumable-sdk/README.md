@@ -58,4 +58,6 @@ to add next.
   SDK before.
 - The fixture is pinned by the SDK commit that contains this kit.
 - Network is required for `go mod download`; no external service is needed.
+- The workdir is a standalone module. If it sits inside a Go workspace, run Go
+  commands with `GOWORK=off`, and give the runner a writable `GOCACHE`.
 - Do not fix the SDK during a run, and do not change the prompt or fixture.

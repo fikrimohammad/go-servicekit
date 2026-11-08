@@ -115,7 +115,7 @@ Details, acceptance criteria, and verification are in [todo.md](todo.md).
 - [x] The CI doc-contracts job is green on the PR
 
 ### Phase 4: Proof
-- [ ] T22: Fresh-agent dry run; record kit defects
+- [x] T22: Fresh-agent dry run; record kit defects
 - [ ] T23: Run the six sample evals and fill the correction log
 
 ### Checkpoint D: eval proof

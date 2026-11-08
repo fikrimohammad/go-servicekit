@@ -21,3 +21,4 @@ into a correction.
 
 | Sample | Date | Runner | Done command | Outcome |
 | --- | --- | --- | --- | --- |
+| errs | 2026-11-08 | fresh agent | `GOWORK=off go test ./...` | pass, zero corrections |
