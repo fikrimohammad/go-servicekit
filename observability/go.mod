@@ -3,7 +3,7 @@ module github.com/fikrimohammad/go-servicekit/observability
 go 1.26.5
 
 require (
-	github.com/fikrimohammad/go-servicekit/identity v0.1.1
+	github.com/fikrimohammad/go-servicekit/identity v0.2.0
 	go.opentelemetry.io/otel v1.45.0
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc v1.45.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.45.0
