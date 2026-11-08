@@ -124,7 +124,7 @@ Details, acceptance criteria, and verification are in [todo.md](todo.md).
 - [ ] Findings are attached to the PR
 
 ### Phase 5: Release
-- [ ] T24: Bump `VERSION` and sibling requires to `v0.1.1`
+- [x] T24: Bump `VERSION` and sibling requires to `v0.1.1`
 - [ ] T25: Tag every module; verify proxy installs
 - [ ] T26: Spot-check `db` and `errs` against `v0.1.1`
 
