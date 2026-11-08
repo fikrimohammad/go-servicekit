@@ -1,7 +1,3 @@
-// Package client defines the shared contract every config backend
-// (etcd, infisical, ...) implements. Keeping it separate from the top-level
-// confloader package breaks the import cycle that would otherwise form
-// between the loaders and the concrete clients.
 package client
 
 import (

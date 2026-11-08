@@ -1,8 +1,3 @@
-// Package engine schedules and runs cron jobs from the cron package. It wraps
-// robfig/cron for the schedules, and runs each job through a middleware chain
-// that applies the toggler, the distributed locker, the timeout, panic
-// recovery, logging, metrics, and tracing. Create an Engine with [New], register
-// jobs, call [Engine.Start], and call [Engine.Stop] with a context on shutdown.
 package engine
 
 import (

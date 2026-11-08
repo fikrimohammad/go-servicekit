@@ -1,12 +1,3 @@
-// Package confloader loads and watches hot configuration / secrets from
-// pluggable backends (etcd, infisical, ...).
-//
-// Devs declare their config as a struct of Getter[T] fields, each tagged with
-// `conf:"folder=...,key=..."`. The loader eagerly fetches every entry (unless
-// started lazily), keeps them fresh via a background cache-with-polling loop,
-// and exposes typed, thread-safe accessors. A Getter.Get performs a direct
-// source fetch whenever the cached value is missing or stale, so reads never
-// block on the polling loop and never misreport a cold or stale key.
 package confloader
 
 import (

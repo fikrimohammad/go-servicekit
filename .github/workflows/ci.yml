@@ -47,6 +47,24 @@ jobs:
       - name: Test gostyle
         run: cd .agents/skills/go-best-practices/scripts && GOWORK=off go test -count=1 gostyle.go gostyle_test.go
 
+  doc-contracts:
+    name: doc contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: "**/go.sum"
+
+      - name: Test the contract check
+        run: bash .github/scripts/check-doc-contracts_test.sh
+
+      - name: Check doc contracts
+        run: ./.github/scripts/check-doc-contracts.sh
+
   test:
     name: ${{ matrix.module }}
     needs: modules
@@ -80,6 +98,9 @@ jobs:
         uses: golangci/golangci-lint-action@v9
         with:
           version: ${{ env.GOLANGCI_VERSION }}
+          # Downloading the release binary from GitHub intermittently returns
+          # HTTP 504. goinstall builds it through the Go module proxy instead.
+          install-mode: goinstall
           working-directory: ${{ matrix.module }}
           # Modules in LAX_MODULES fail only on new issues; all others are linted on
           # the full tree. See LAX_MODULES above.

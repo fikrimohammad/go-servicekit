@@ -1,6 +1,3 @@
-// Package logs installs the application logger, routes structured records to
-// stdout/stderr by severity, and adds trace correlation fields from a record's
-// context.
 package logs
 
 import (

@@ -10,9 +10,9 @@ replace github.com/fikrimohammad/go-servicekit/observability => ../observability
 
 require (
 	github.com/cloudwego/hertz v0.10.6
-	github.com/fikrimohammad/go-servicekit/errs v0.1.0
-	github.com/fikrimohammad/go-servicekit/identity v0.1.0
-	github.com/fikrimohammad/go-servicekit/observability v0.1.0
+	github.com/fikrimohammad/go-servicekit/errs v0.1.1
+	github.com/fikrimohammad/go-servicekit/identity v0.1.1
+	github.com/fikrimohammad/go-servicekit/observability v0.1.1
 	go.opentelemetry.io/otel v1.45.0
 	go.opentelemetry.io/otel/sdk v1.45.0
 	go.opentelemetry.io/otel/sdk/metric v1.45.0

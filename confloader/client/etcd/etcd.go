@@ -1,4 +1,3 @@
-// Package etcd implements a confloader client backed by go.etcd.io/etcd/client/v3.
 package etcd
 
 import (

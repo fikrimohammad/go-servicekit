@@ -1,24 +1,3 @@
-// Package server builds the HTTP server for SDK services. Every request that
-// Hertz routes, and every request that matches no route or the wrong method,
-// goes through a fixed middleware stack that enforces the telemetry contract
-// and the problem+json error format. The stack runs in this order:
-//
-//	requestID → tracing → metrics → logging → recovery → team middleware → handler
-//
-// Requests that Hertz rejects before routing never reach the stack. These are
-// a malformed request line and oversized headers, which get Hertz's own
-// response with no request ID, span, metric, or access-log line.
-//
-// Team middleware is added with [Server.Hertz] and its Use method. It runs
-// inside recovery, so a panic in it is recovered and answered with a 500
-// problem. Hertz only appends middleware, so the standard layers can't be
-// removed or reordered. Hertz applies Use only to routes registered after the
-// call, so add team middleware before registering routes, or attach it to a
-// route group.
-//
-// Trailing slashes are not redirected. A request for "/users/42/" against the
-// route "/users/:id" gets a 404 problem from the stack, so it is recorded like
-// any other unmatched request.
 package server
 
 import (

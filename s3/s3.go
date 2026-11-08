@@ -1,21 +1,3 @@
-// Package s3 wraps the AWS S3 SDK transfer manager, S3 client, and presign client
-// with standard AWS SDK for Go v2 types and records OpenTelemetry traces and metrics
-// per operation via Smithy middleware.
-//
-// New builds an AWS S3 client from a Config, derives a transfer manager
-// (multipart uploads and downloads) and a presign client from the same underlying
-// client, registers an OpenTelemetry Smithy middleware stack, and returns an
-// instrumented Client.
-//
-// Every operation executed through Client is automatically
-// recorded with one client span named after the operation and the
-// rpc.client.call.duration histogram with OTel attributes:
-// rpc.system.name ("aws-api"), rpc.method ("S3/<Operation>"), aws.s3.bucket,
-// cloud.region (when known), server.address and server.port (when a
-// self-hosted endpoint is configured), and error.type (set only on failure). Its
-// value is the AWS API error code when the error carries one; otherwise it is one
-// of connection_refused, connection_reset, dns_error, timeout, canceled,
-// network_error (any other net.Error), or _OTHER (including SDK validation errors).
 package s3
 
 import (

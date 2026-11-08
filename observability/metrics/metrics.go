@@ -1,5 +1,3 @@
-// Package metrics installs the metrics pipeline and records counters,
-// histograms, up-down counters, and gauges through OTel instruments.
 package metrics
 
 import (

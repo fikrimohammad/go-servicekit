@@ -1,4 +1,3 @@
-// Package infisical implements a confloader client backed by the Infisical Go SDK.
 package infisical
 
 import (

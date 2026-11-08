@@ -2,7 +2,7 @@
 // They check that the same request emits the same telemetry through
 // client.New's Do and through client.RoundTripper, and that a rest/client call
 // to a rest/server route starts a separate trace with no trace context, baggage,
-// or request ID on the wire. The root has no other Go files, so the telemetry
+// or request ID on the wire. The root has no API, so the telemetry
 // fixtures live here.
 package rest_test
 

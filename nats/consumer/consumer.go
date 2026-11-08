@@ -1,6 +1,3 @@
-// Package consumer runs durable NATS JetStream consumers. A [Consumer] passes each
-// delivered message to a [HandlerFunc] and settles the message from the handler's
-// error.
 package consumer
 
 import (
