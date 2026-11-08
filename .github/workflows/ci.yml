@@ -98,6 +98,9 @@ jobs:
         uses: golangci/golangci-lint-action@v9
         with:
           version: ${{ env.GOLANGCI_VERSION }}
+          # Downloading the release binary from GitHub intermittently returns
+          # HTTP 504. goinstall builds it through the Go module proxy instead.
+          install-mode: goinstall
           working-directory: ${{ matrix.module }}
           # Modules in LAX_MODULES fail only on new issues; all others are linted on
           # the full tree. See LAX_MODULES above.
