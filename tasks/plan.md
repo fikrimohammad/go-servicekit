@@ -74,11 +74,11 @@ Details, acceptance criteria, and verification are in [todo.md](todo.md).
 - [x] T4: `check-doc-contracts.sh` plus its test harness
 
 ### Checkpoint A: foundation
-- [ ] README map lists 21 paths; `nats`/`rest` roots render under `go doc`
-- [ ] The `db` contract renders all six headings
-- [ ] The check script's tests pass; its only repo findings are the 20 unwritten
+- [x] README map lists 21 paths; `nats`/`rest` roots render under `go doc`
+- [x] The `db` contract renders all six headings
+- [x] The check script's tests pass; its only repo findings are the 20 unwritten
       contracts
-- [ ] Every module still passes vet and test
+- [x] Every module still passes vet and test
 
 ### Phase 2: Contracts (parallel)
 - [ ] T5: `errs`, `errgroup`, `identity`
