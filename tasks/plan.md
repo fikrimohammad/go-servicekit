@@ -116,7 +116,7 @@ Details, acceptance criteria, and verification are in [todo.md](todo.md).
 
 ### Phase 4: Proof
 - [x] T22: Fresh-agent dry run; record kit defects
-- [ ] T23: Run the six sample evals and fill the correction log
+- [x] T23: Run the six sample evals and fill the correction log
 
 ### Checkpoint D: eval proof
 - [ ] Zero SDK-usage corrections, or every one logged as a finding

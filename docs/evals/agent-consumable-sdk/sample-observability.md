@@ -10,8 +10,9 @@ Implement `wire` in `wiring_test.go` using the SDK's `observability` packages.
   `otel.SetMeterProvider`.
 - Create a tracer with `tracer.New`, install it with `tracer.SetGlobal`.
 - Return a stop function that stops both clients.
-- Use endpoint `127.0.0.1:4317`, `Insecure: true`, and a one-second
-  `Timeout` on each config so the test does not wait for a collector.
+- Use endpoint `127.0.0.1:4317`, `Insecure: true`, and a one-second exporter
+  timeout: `Timeout` on the metrics config and `ExportTimeout` on the tracer
+  config, so the test does not wait for a collector.
 
 Do not change the test or add dependencies.
 
