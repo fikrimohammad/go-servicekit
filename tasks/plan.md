@@ -92,14 +92,14 @@ Details, acceptance criteria, and verification are in [todo.md](todo.md).
 - [x] T13: `observability/metrics`, `observability/tracer`
 
 ### Checkpoint B: contracts complete
-- [ ] `check-doc-contracts.sh` passes on the whole tree
-- [ ] All 21 contracts render under `go doc -all`; each is 150–250 words with no
+- [x] `check-doc-contracts.sh` passes on the whole tree
+- [x] All 21 contracts render under `go doc -all`; each is 150–250 words with no
       code counted
-- [ ] No exported API changed; every module passes vet, test, and lint
+- [x] No exported API changed; every module passes vet, test, and lint
 - [ ] Reviewer spot-checks three contracts against the code
 
 ### Phase 3: CI and eval kit
-- [ ] T14: Wire the contract check into CI (owner approval required)
+- [x] T14: Wire the contract check into CI (owner approval required)
 - [ ] T15: Eval-kit protocol, correction log, `setup.sh`
 - [ ] T16: `errs` sample (first complete kit)
 - [ ] T17: `db` sample

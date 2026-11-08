@@ -60,6 +60,9 @@ GitHub Actions workflows live in `.github/workflows/`:
   `go mod tidy -diff` check. Every module except those in `LAX_MODULES` (today
   only `confloader`) is linted on the full tree and checked by gostyle.
   gostyle also has its own test job.
+- **`doc-contracts`** job in `ci.yml` runs
+  `.github/scripts/check-doc-contracts.sh` and its tests: every public package
+  must have a `doc.go` contract and a row in the import map.
 - **`coverage-report.yml`** — on PR. Runs tests with coverage per module and
   posts a per-module coverage table as a PR comment.
 - **`db-integration`** job in `ci.yml` runs the MySQL and PostgreSQL integration
