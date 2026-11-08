@@ -1,6 +1,3 @@
-// Package attributes provides helpers for normalizing developer-style
-// attribute keys and converting values to OpenTelemetry attributes. Keys that
-// already follow OpenTelemetry conventions are preserved.
 package attributes
 
 import (

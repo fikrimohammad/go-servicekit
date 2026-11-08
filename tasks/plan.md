@@ -88,7 +88,7 @@ Details, acceptance criteria, and verification are in [todo.md](todo.md).
 - [x] T9: `confloader/client/etcd`, `confloader/client/infisical`
 - [x] T10: `rest/client`, `rest/server`
 - [x] T11: `nats/consumer`, `nats/producer`
-- [ ] T12: `observability` root, `observability/attributes`, `observability/logs`
+- [x] T12: `observability` root, `observability/attributes`, `observability/logs`
 - [ ] T13: `observability/metrics`, `observability/tracer`
 
 ### Checkpoint B: contracts complete
