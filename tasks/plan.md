@@ -1,101 +1,162 @@
-# Implementation Plan: guardrails, release, test-transports (SDK fix backlog, PR 4)
+# Implementation Plan: agent-consumable-sdk (docs-only)
 
-Spec: [SPEC-guardrails](../docs/specs/sdk-fix-backlog/SPEC-guardrails.md) (approved
-2026-11-02). Capability map: [capability-map](../docs/specs/sdk-fix-backlog/capability-map.md).
-Tasks: [tasks/todo.md](todo.md). PRs 1–3 shipped as #16, #17, and #18.
+Spec: [SPEC-agent-consumable-sdk](../docs/specs/agent-consumable-sdk/SPEC-agent-consumable-sdk.md)
+(re-scoped 2026-11-08). Intent:
+[docs/intent/agent-consumable-sdk.md](../docs/intent/agent-consumable-sdk.md). Idea:
+[docs/ideas/agent-consumable-sdk.md](../docs/ideas/agent-consumable-sdk.md). Tasks:
+[todo.md](todo.md).
 
 ## Overview
 
-One PR on branch `feat/guardrails`, one commit per task. It covers three parts:
+One PR on branch `feat/agent-consumable-sdk`, one commit per task. It ships
+documentation only:
 
-- **A. Guardrails:** gostyle telemetry rules, strict lint by default, and gostyle in CI.
-- **B. Release:** the move to `github.com/fikrimohammad/go-servicekit`, v0.1.0 for every
-  module, and an atomic release with an installability check.
-- **C. Real transports:** db, redis, s3, and nats tests on in-process fakes, with the
-  transport stubs and seams deleted.
+- **Contracts:** a `doc.go` for all 21 public import paths with the six headings,
+  plus a task→package root README and doc-only `nats`/`rest` roots.
+- **Guard:** `.github/scripts/check-doc-contracts.sh`, its test harness, and a CI
+  job.
+- **Proof:** a self-contained eval kit with six in-process sample evals.
+- **Release:** `v0.1.1`, docs only.
 
-## Execution Roles (owner decision 2026-11-02, changed from PRs 1–3)
+No exported API changes. A capability an eval finds missing is recorded as a
+finding, not fixed here; the catalog migration is a separate project.
 
-- **Each phase is done by Haiku 5.5** as coder, tester, and reviewer.
-  - A Haiku subagent implements and tests each task. It never commits, and git is read-only
-    for it.
-  - At each phase checkpoint, a separate Haiku subagent reviews that phase's tasks.
-- **After all tasks are done, Opus 5.5 reviews the whole PR once**, as Checkpoint B.
-- **Orchestrator:**
-  - reruns every check, commits one task per commit, pushes, and ticks todo.md;
-  - applies small review fixes;
-  - owns go.mod changes (the three test fakes) and the module-wide checks;
-  - runs the rule's recall and precision validation in worktrees, recorded in the PR.
+This plan replaces the completed guardrails plan (all tasks checked; PR #19
+merged). The previous plan stays in git history.
+
+## Execution
+
+- Branch `feat/agent-consumable-sdk` off `main`; one commit per task, subject
+  `<type>(<area>): <summary> (T<n>)`.
+- Run the touched module's verification before each commit; tick the task in
+  [todo.md](todo.md).
+- Checkpoints are review gates: the owner (or a reviewer agent) signs off before
+  the next phase.
+- Tasks within a wave touch disjoint files and can run in parallel; see
+  Parallelization.
+- **Eval runner:** delegated by the owner (2026-11-08); T22–T23 use a fresh
+  agent that sees only the kit and the workdir.
 
 ## Architecture Decisions
 
-- **Rename first, alone.** T2, done by Haiku like every task, touches about 106 files across every module. Landing it before
-  anything else keeps every later diff free of path noise, and stops parallel agents from
-  conflicting on imports.
-- **Parallel by area.** gostyle (T3), release scripting (T4), and each module's transport
-  rewrite (T5–T8) touch disjoint files. ci.yml is touched only by T9, which runs after them.
-  The two parallel waves are capped at four agents each, to stay within the Haiku usage
-  limit seen in PR 1.
-- **The rule is validated before CI enforces it.** T3 builds the rules. The orchestrator then
-  shows recall on `411bb72` and `216b2aa`, and precision on the branch. T9 only then turns
-  gostyle on in CI. Precision is checked again after the transport rewrite, since T5–T8
-  change production files.
-- **Release logic in a script.** `release.yml`'s shell moves to `.github/scripts/release.sh`,
-  with a `--dry-run` mode that CI runs on every PR. The workflow file stays thin, and the
-  logic gets a test run before the first real tag.
-- **Kept stubs are explicit.** Each kept transport stub has a one-line comment saying why no
-  fake can reach its case. Checkpoint B reviews the list.
-
-## Coverage Baselines (main @ 9373090, 2026-11-02)
-
-| Package | Coverage |
-| --- | --- |
-| db | 88.8% |
-| redis | 84.5% (the Checkpoint A reviewer measured main; 84.9% was a local reading) |
-| s3 | 86.3% |
-| nats/consumer | 93.3% |
-| nats/producer | 96.4% |
-| nats/internal/wire | 95.8% |
-
-The four client modules have 10,995 lines of tests in total.
+- **One package comment, in `doc.go`.** Every package in the set gets a
+  `doc.go`; where the comment currently lives in `<pkg>.go`, it moves. The check
+  enforces exactly one `// Package ` comment per package.
+- **The check derives the package set.** It runs `go list` per module with
+  `GOWORK=off`, excludes `/internal/` and test-only packages, and accepts
+  optional import paths so a mid-project task can check only its own packages.
+  README coverage is checked by exact path; `.../nats` and `.../rest` are the
+  declared doc-only roots, never table rows.
+- **The import map lists 21 rows.** `nats` and `rest` appear only in a "module
+  roots are not importable" note; `observability` stays a row because it is the
+  wiring guide (no API).
+- **The eval kit is prose + `setup.sh` + static fixtures.** `setup.sh <sample>`
+  copies a fixture to a temp dir, adds `replace` directives for all 11 SDK
+  modules, runs `go mod download`, prints the workdir. No harness, no CI agent
+  runs.
+- **Evals run against the working tree; the tag is spot-checked.** Fixtures use
+  local replaces pre-release; after `v0.1.1`, two samples re-run from the proxy
+  without replaces.
+- **The release bump is atomic.** `VERSION`, 11 sibling `require`s, and the
+  README version line change together; that is a mechanical exception to the
+  5-file task guideline.
+- **Order:** contracts before prompts, prompts before evals, evals before the
+  release. Catalog is out.
 
 ## Task List
 
 Details, acceptance criteria, and verification are in [todo.md](todo.md).
 
-### Phase 0: Setup
-- [x] T1: Commit the spec and plan, and open a draft PR (#19)
-- [x] T2: Rename the module path to go-servicekit, and set sibling requires to v0.1.0
+### Phase 1: Foundation
+- [x] T1: Commit the re-scoped docs and this plan; open a draft PR
+- [ ] T2: Root import map and doc-only `nats`/`rest` roots
+- [ ] T3: Contract shape and the `db` exemplar
+- [ ] T4: `check-doc-contracts.sh` plus its test harness
 
-### Wave 1 (parallel)
-- [x] T3: gostyle `error-type-message` and `metric-high-cardinality` rules, with testdata and tests
-- [x] T4: Release: `VERSION`, `.github/scripts/release.sh` (atomic, dry run, installability), `release.yml`
-- [x] T5: db tests on sqlmock; delete the fake driver where sqlmock covers its cases
-- [x] T6: redis tests on miniredis; delete the transport stubs and seams
+### Checkpoint A: foundation
+- [ ] README map lists 21 paths; `nats`/`rest` roots render under `go doc`
+- [ ] The `db` contract renders all six headings
+- [ ] The check script's tests pass; its only repo findings are the 20 unwritten
+      contracts
+- [ ] Every module still passes vet and test
 
-### Checkpoint A: rule recall and precision shown; Haiku review of T1–T6 (done)
-### Wave 2 (parallel)
-- [x] T7: s3 tests on gofakes3; delete the API stubs and seams
-- [x] T8: nats tests on the embedded server; delete the jsProducer/jsConsumer seams and mocks, except justified stubs
+### Phase 2: Contracts (parallel)
+- [ ] T5: `errs`, `errgroup`, `identity`
+- [ ] T6: `redis`, `s3`
+- [ ] T7: `cron`, `cron/engine`
+- [ ] T8: `confloader`, `confloader/client`
+- [ ] T9: `confloader/client/etcd`, `confloader/client/infisical`
+- [ ] T10: `rest/client`, `rest/server`
+- [ ] T11: `nats/consumer`, `nats/producer`
+- [ ] T12: `observability` root, `observability/attributes`, `observability/logs`
+- [ ] T13: `observability/metrics`, `observability/tracer`
 
-### Checkpoint A2: Haiku review of T7–T8 (done)
-### Wave 3
-- [x] T9: CI: `LAX_MODULES`, a gostyle step plus a self-test job, MySQL and PostgreSQL services, the release dry run
-- [x] T10: Docs: AGENTS.md, both skills, READMEs, backlog ticks
+### Checkpoint B: contracts complete
+- [ ] `check-doc-contracts.sh` passes on the whole tree
+- [ ] All 21 contracts render under `go doc -all`; each is 150–250 words with no
+      code counted
+- [ ] No exported API changed; every module passes vet, test, and lint
+- [ ] Reviewer spot-checks three contracts against the code
 
-### Checkpoint B: Haiku review of T9–T10, then the Opus review of all tasks; PR description; owner review (done; awaiting owner review)
+### Phase 3: CI and eval kit
+- [ ] T14: Wire the contract check into CI (owner approval required)
+- [ ] T15: Eval-kit protocol, correction log, `setup.sh`
+- [ ] T16: `errs` sample (first complete kit)
+- [ ] T17: `db` sample
+- [ ] T18: `confloader` sample
+- [ ] T19: `rest/server` sample
+- [ ] T20: `observability` sample
+- [ ] T21: `nats/consumer` sample
+
+### Checkpoint C: kit complete
+- [ ] `setup.sh <sample>` works for all six; each done command fails on its
+      untouched fixture
+- [ ] The protocol, correction log, and prompts are self-contained
+- [ ] The CI doc-contracts job is green on the PR
+
+### Phase 4: Proof
+- [ ] T22: Fresh-agent dry run; record kit defects
+- [ ] T23: Run the six sample evals and fill the correction log
+
+### Checkpoint D: eval proof
+- [ ] Zero SDK-usage corrections, or every one logged as a finding
+- [ ] No shim in any diff
+- [ ] Findings are attached to the PR
+
+### Phase 5: Release
+- [ ] T24: Bump `VERSION` and sibling requires to `v0.1.1`
+- [ ] T25: Tag every module; verify proxy installs
+- [ ] T26: Spot-check `db` and `errs` against `v0.1.1`
+
+### Checkpoint E: release
+- [ ] 11 tags at `v0.1.1` on one commit; verify-install job green
+- [ ] Spot checks pass with no replaces
+- [ ] Success criteria 1–8 of the spec hold
+
+## Parallelization
+
+- **Wave 1:** T2 and T3 in parallel (disjoint files); T4 after both.
+- **Wave 2:** T5–T13 in parallel, capped at four concurrent tasks; each touches
+  only its own packages.
+- **Wave 3:** T14 and T15 in parallel; then T16–T21 in parallel, capped at
+  three; each sample depends on its package contract.
+- **Wave 4:** T22 → T23 sequential; they need the owner's eval runner.
+- **Release:** T24 → T25 → T26 sequential.
 
 ## Risks and Mitigations
 
 | Risk | Impact | Mitigation |
 | --- | --- | --- |
-| The rename misses a reference, such as a string in a test or a doc link | Med | T2 ends with `grep -rn go-dev-sdk` returning only the backlog's history lines, plus a full build, test, and tidy of every module |
-| The rule's flow tracing has false positives on real code | High | Precision must be 0 on the branch before T9 enables it. If it can't be, narrow the rule (spec assumption 4) |
-| A fake can't reproduce a stub's case (hung ack, mid-stream transport error) | Med | Keep that stub with a reason (spec assumption 13); the reviewer checks the list |
-| The service containers make CI slow or flaky | Low | Use health-checked `services:`. The DB tests run only in the db module's job |
-| The installability check can't run before a real tag | Low | The dry run covers the logic. The first real run is the owner's v0.1.0, with a documented recovery: fix forward with v0.1.1, never reuse a version |
-| The Haiku usage limit interrupts a wave | Low | Waves are capped at four agents; saved work is finished by the orchestrator |
+| A contract drifts from the real API | High | Author from `go doc -all` and `example_test.go`; reviewer spot-checks three; sample evals catch wiring errors |
+| The check is brittle (test-only packages, internals, roots) | Med | Test harness covers each failure mode and each exclusion; optional path args; README rules stated explicitly |
+| `setup.sh` misses a transitive sibling replace | Med | It writes replaces for all 11 modules unconditionally; each sample smoke-tests it |
+| Fixtures need network and pinned deps (sqlmock, nats-server) | Low | `go mod download` in setup; versions pinned in each fixture; the kit states the Go-only requirement |
+| Eval runner variance masks a doc defect | Med | Fixed prompt, allowed files, done command, dry run first; every question becomes a kit defect |
+| CI wiring is declined or delayed | Low | T14 is gated; the check still runs from the PR body and locally |
+| 21 contracts are the critical path; a slip moves the release | Med | Parallel waves; Checkpoint B gates the kit; spec says the release slips, not the check |
+| The version bump misses a sibling `require` | Low | `release.sh "$(cat VERSION)" --check`; one atomic commit |
 
 ## Open Questions
 
-- None.
+None. Resolved 2026-11-08: the CI workflow change is approved; the eval runner
+is delegated by the owner (T22–T23 use a fresh agent with kit-only context).

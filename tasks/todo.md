@@ -1,249 +1,790 @@
-# Tasks: guardrails, release, test-transports (SDK fix backlog, PR 4)
+# Tasks: agent-consumable-sdk (docs-only)
 
-Plan: [plan.md](plan.md). Spec: [SPEC-guardrails](../docs/specs/sdk-fix-backlog/SPEC-guardrails.md).
+Plan: [plan.md](plan.md). Spec:
+[SPEC-agent-consumable-sdk](../docs/specs/agent-consumable-sdk/SPEC-agent-consumable-sdk.md).
+Intent: [docs/intent/agent-consumable-sdk.md](../docs/intent/agent-consumable-sdk.md).
 
-**Module checks.** Run in every module a task touches. Every module except confloader is
-strict, so its lint is full-tree:
+**Module checks.** Run in every module a task touches:
+
 - `gofmt -l .`
 - `go vet ./...`
-- `go test -count=1 -shuffle=on ./...` and `-race`
+- `go test -count=1 ./...` (add `-race` at checkpoints)
 - `golangci-lint run ./...` (confloader: `--new-from-merge-base=main`)
 - `GOWORK=off go run ../.agents/skills/go-best-practices/scripts/gostyle.go ./...`
+  (strict modules only)
 - `go mod tidy -diff`
 
-**Test-wording check.** For the lines a task changes, this must print nothing:
-`git diff -U0 | grep '^+' | grep -E 't\.(Errorf|Fatalf|Error|Fatal)\(.*\b(should|expected|actual|Expected|Actual)\b'`
+**Doc checks.** From the repo root:
 
-**TDD rule.** New behaviour (the rules, the release script) is test-first. In the transport
-rewrite, each moved test must still fail when its fix is reverted. Spot-check it by mutation,
-as in PR 3.
+- `.github/scripts/check-doc-contracts.sh` (all packages) or
+  `.github/scripts/check-doc-contracts.sh <import-path>...` (focused).
+- `go doc -all` in each package directory, to confirm the headings render.
 
-Each task is one commit, with the subject `<type>(<area>): <summary> (<task>)`.
+**TDD rule.** Only T4 adds behavior (the check script); it is test-first. Every
+other task is documentation, shell glue, or a version bump.
+
+Each task is one commit, with the subject `<type>(<area>): <summary> (T<n>)`.
 
 ---
 
-## Task 1: Commit the spec and plan, open a draft PR
+## Task 1: Commit the re-scoped docs and this plan; open a draft PR
 
-**Description:** On branch `feat/guardrails` (from main @ 9373090), commit SPEC-guardrails, the
-capability map, this plan, and the task list. Open a draft PR on `fikrimohammad/go-servicekit`
-that links the spec.
-
-**Acceptance criteria:**
-- [x] One `docs:` commit holds them.
-- [x] A draft PR targets `main`.
-
-**Verification:** `gh pr view --json isDraft` reports true.
-
-**Dependencies:** None · **Files:** `docs/specs/**`, `tasks/*` · **Scope:** XS
-
-## Task 2: Rename the module path; sibling requires at v0.1.0
-
-**Description:**
-- Replace `github.com/fikrimohammad/go-dev-sdk` with `github.com/fikrimohammad/go-servicekit`
-  in:
-  - every go.mod (`module`, `require`, `replace`);
-  - every .go import and string;
-  - `.golangci.yml` (the ireturn allow list);
-  - the READMEs, AGENTS.md, the skills, and the specs and tasks (except history quotes in the
-    backlog doc).
-- Set every sibling `require` to `v0.1.0`. That replaces the zero pseudo-versions and the
-  `v1.0.0` ones, including the indirect ones.
-- Run `go mod tidy` per module, then `go work vendor`.
+**Description:** Create `feat/agent-consumable-sdk` from `main`. Commit the three
+re-scoped docs, this plan, and this task list. Open a draft PR that states the
+docs-only scope, links the spec, and lists the six sample evals.
 
 **Acceptance criteria:**
-- [x] `grep -rn 'go-dev-sdk' --exclude-dir=vendor .` matches only the history lines that
-      record the rename in `docs/ideas/sdk-fix-backlog.md` and the specs.
-- [x] `grep -h 'go-servicekit/[a-z]* v' */go.mod | sort -u` shows only `v0.1.0`.
-- [x] Every module passes the module checks.
+- [ ] The branch has one commit containing only the three docs and `tasks/`.
+- [ ] The draft PR links the spec and states: docs-only, no API changes,
+      `v0.1.1`, catalog migration out of scope.
+- [ ] `main` is untouched and the working tree is clean.
 
-**Dependencies:** T1 · **Files:** about 106 files across all modules · **Scope:** M (mechanical)
+**Verification:**
+- [ ] `git show --stat HEAD` lists exactly the five docs/task files.
+- [ ] `git status --short` is empty.
+- [ ] `gh pr view --json isDraft,title` shows the draft.
 
-## Task 3: gostyle telemetry rules
+**Dependencies:** None
+**Files likely touched:**
+- `docs/ideas/agent-consumable-sdk.md`
+- `docs/intent/agent-consumable-sdk.md`
+- `docs/specs/agent-consumable-sdk/SPEC-agent-consumable-sdk.md`
+- `tasks/plan.md`
+- `tasks/todo.md`
 
-**Description:** In `.agents/skills/go-best-practices/scripts/gostyle.go`:
-- Add `error-type-message` and `metric-high-cardinality`, as spec assumptions 1–3 describe.
-- Add a package-scoped pass that groups the non-test files of each directory.
-- The rules follow the attribute map through identifiers, builder calls (to a fixpoint), map
-  literals, and index writes. A clone stops the trace.
-- Keys are matched as a string literal, `semconv.X`, or `string(semconv.X)`.
-- Each rule gets a `ruleDocs` entry linking the semconv guidance.
-- Standard library only.
+**Estimated scope:** S
 
-**Acceptance criteria:**
-- [x] `testdata/bad` triggers each new rule in each shape: a direct literal, a builder
-      function, an index write, an identifier from `err.Error()`, and a builder that returns
-      `err.Error()`.
-- [x] `testdata/good` has the safe shapes (a cloned span-only map, a coded `error.type`, a
-      bounded key) and reports nothing.
-- [x] `TestTelemetryRules_Table` covers each key form.
-- [x] Existing rules are unchanged; `TestCheck` passes.
+---
 
-**Verification:** `GOWORK=off go test -count=1 gostyle.go gostyle_test.go`. The orchestrator
-then runs recall at `411bb72` and `216b2aa`, and precision on the branch (spec assumption 4).
+## Task 2: Root import map and doc-only `nats`/`rest` roots
 
-**Dependencies:** T2 · **Files:** `gostyle.go`, `gostyle_test.go`, `testdata/**` · **Scope:** M
-
-## Task 4: Release script and workflow
-
-**Description:**
-- Add a `VERSION` file at the repo root (`v0.1.0`).
-- Add `.github/scripts/release.sh <version> [--dry-run]`, which does these steps in order:
-  1. Validate the semver shape and the major against each module path.
-  2. Check that every sibling require equals `<version>`.
-  3. Check that no `<module>/<version>` tag exists and that the proxy doesn't have the
-     version.
-  4. Without `--dry-run`, tag every module on HEAD and run `git push --atomic origin <tags>`.
-- Add `.github/scripts/verify-install.sh <version>`: in a temp module outside the repo, run
-  `GOPROXY=https://proxy.golang.org GOFLAGS=-mod=mod` `go get` on every module at the
-  version, then `go build` on a file that imports one package from each module. It retries
-  while the proxy catches up, for up to about 5 minutes.
-- Rework `release.yml`: one `version` input that defaults to the `VERSION` file, the release
-  step, then a verify-install job.
+**Description:** Replace the README "Modules" table with a task→package import
+map for the 21 import paths. Add `nats/doc.go` and `rest/doc.go` that say the
+module root has no importable API and name the subpackages. Reword the
+root parity-test headers that claim the roots have no other Go files.
 
 **Acceptance criteria:**
-- [x] `release.sh v0.1.0 --dry-run` passes on the branch.
-- [x] It fails, with a clear message, on:
-  - a mismatched sibling require;
-  - a bad version string;
-  - a v2 version on a non-/v2 path;
-  - a version already in the proxy (use `v1.0.0` against `go-dev-sdk`, through an override
-    of the module prefix, or a stubbed curl).
-- [x] A bats-free shell test, `.github/scripts/release_test.sh`, runs those cases.
-- [x] `shellcheck` is clean, if it is available.
+- [ ] The README has one `| I need | Import | Notes |` table with exactly the 21
+      spec paths; a separate note lists `.../nats` and `.../rest` as module
+      roots with no importable package.
+- [ ] `nats/doc.go` and `rest/doc.go` start with `Package nats` / `Package rest`,
+      name the subpackages, and render under `go doc`.
+- [ ] The root parity tests still pass and their headers no longer say the root
+      has no `.go` files.
 
-**Dependencies:** T2 · **Files:** `VERSION`, `.github/scripts/*`, `.github/workflows/release.yml` · **Scope:** M
+**Verification:**
+- [ ] `awk` count of table rows in `README.md` is 21.
+- [ ] `(cd nats && go test ./... && go doc .)` and `(cd rest && go test ./... && go doc .)`.
+- [ ] `go vet ./...` in both modules.
 
-## Task 5: db tests on sqlmock
+**Dependencies:** T1
+**Files likely touched:**
+- `README.md`
+- `nats/doc.go`
+- `rest/doc.go`
+- `nats/parity_test.go`
+- `rest/parity_test.go`
 
-**Description:**
-- Rewrite the db unit tests that use the in-repo fake driver to use go-sqlmock, through
-  `Config{Driver: "sqlmock", DSN}`. That covers the query, exec, named, transaction, error,
-  telemetry, and ctx paths.
-- Delete the fake driver and its seams where sqlmock covers their cases. Keep any helper that
-  sqlmock can't replace, with a reason.
-- The env-gated MySQL and PostgreSQL integration tests stay. They must pass against real
-  servers (T9 wires CI).
-- The orchestrator adds go-sqlmock v1.5.2 to db/go.mod.
+**Estimated scope:** S
 
-**Acceptance criteria:**
-- [x] No test depends on the deleted fake driver.
-- [x] Coverage ≥ 88.8%.
-- [x] PR 2's regression tests still exist and still fail when their fix is reverted
-      (orchestrator spot-check).
+---
 
-**Verification:** db module checks, plus the integration tests run locally against Docker
-MySQL and PostgreSQL if available. Otherwise they run in T9's CI.
+## Task 3: Contract shape and the `db` exemplar
 
-**Dependencies:** T2 · **Files:** `db/*_test.go`, `db/*.go` (seam removal), `db/go.mod` (orchestrator) · **Scope:** L
-
-## Task 6: redis tests on miniredis
-
-**Description:**
-- Rewrite the redis tests to run against `miniredis.RunT(t)`. That covers commands,
-  pipelines, transactions, the error prefix, telemetry, the pool poller, Close, and the New
-  ctx.
-- Delete the stub clients and the unexported seams that existed only for them.
-- Keep a stub only for a case miniredis can't produce, such as cluster and sentinel topology
-  routing (miniredis is standalone only), with a reason.
-- The orchestrator adds miniredis/v2 v2.40.0.
+**Description:** Establish the template every later contract follows. Create
+`db/doc.go` with the six headings and move the existing package comment out of
+`db/db.go`. The content covers connect/close, named queries, transactions, and
+the sqlmock test recipe.
 
 **Acceptance criteria:**
-- [x] Coverage ≥ 84.9%.
-- [x] The regression tests still exist and still fail when their fix is reverted
-      (spot-check).
+- [ ] `db/doc.go` starts `// Package db `, has `# When to use`, `# Import`,
+      `# Minimal example`, `# Lifecycle`, `# Common mistakes`, `# Test recipe`
+      in that order, and is 150–250 words excluding code.
+- [ ] The snippet mirrors `db/example_test.go` and uses only the public API.
+- [ ] `db` has exactly one `// Package ` comment, and it is in `doc.go`.
 
-**Verification:** redis module checks.
+**Verification:**
+- [ ] `(cd db && gofmt -l . && go vet ./... && go test -count=1 ./...)`.
+- [ ] `(cd db && go doc -all .)` shows all six sections.
+- [ ] `grep -rn '^// Package ' db --include='*.go'` returns one line, in
+      `db/doc.go`.
 
-**Dependencies:** T2 · **Files:** `redis/*_test.go`, `redis/redis.go` (seam removal), `redis/go.mod` (orchestrator) · **Scope:** L
+**Dependencies:** T1
+**Files likely touched:**
+- `db/doc.go`
+- `db/db.go`
 
-### Checkpoint A
-- [x] Rule recall is shown at `411bb72` and `216b2aa`, and precision is 0 on the branch.
-- [x] Haiku review of T1–T6, with its fixes applied; CI is green.
+**Estimated scope:** S
 
-## Task 7: s3 tests on gofakes3
+---
 
-**Description:**
-- Rewrite the s3 tests to run against gofakes3 with `s3mem` on httptest, through
-  `Config{Endpoint: ts.URL, UsePathStyle: aws.Bool(true)}`. That covers put, get (whole and
-  parts), head, delete, list, multipart upload, presign, the error codes, and telemetry.
-- Delete the API stubs and seams that existed only for them. Keep stubs for transport-level
-  failures that gofakes3 can't inject, with a reason. Close every response body.
-- The orchestrator adds gofakes3 v1.2.0.
+## Task 4: `check-doc-contracts.sh` plus its test harness
 
-**Acceptance criteria:**
-- [x] Coverage ≥ 86.3%.
-- [x] The regression tests still exist and still fail when their fix is reverted
-      (spot-check).
-
-**Verification:** s3 module checks.
-
-**Dependencies:** Checkpoint A · **Files:** `s3/*_test.go`, `s3/s3.go`, `s3/middleware.go` (seam removal), `s3/go.mod` (orchestrator) · **Scope:** L
-
-## Task 8: nats tests on the embedded server
-
-**Description:**
-- Rewrite the producer and consumer unit tests that use the `jsProducer` and `jsConsumer`
-  mocks and factories to run against the embedded JetStream server.
-- Delete the `jsProducer`/`jsConsumer` interfaces, the factories, and the mocks.
-- Keep a stub only where the server can't produce the case: a never-arriving async ack, or a
-  hung drain for the Shutdown-deadline tests. Each kept stub has a reason.
-- No go.mod change: nats-server is already a test dependency.
+**Description:** Write the repository check and its tests. The script derives the
+public package set per module with `go list`, excludes `/internal/` and
+test-only packages, treats `.../nats` and `.../rest` as the declared doc-only
+roots (never table rows), and validates the six headings, the single package
+comment, and README coverage. It accepts optional import paths for focused
+checks.
 
 **Acceptance criteria:**
-- [x] Coverage stays at or above: consumer 93.3%, producer 96.4%, wire 95.8%.
-- [x] PR 3's regression tests still exist and still fail when their fix is reverted
-      (spot-check).
-- [x] Timing tests pass with `-count=3`.
+- [ ] The script fails on each of: missing `doc.go`; a missing heading; a package
+      comment outside `doc.go` or a duplicate; a public path absent from the
+      README table; `.../nats` or `.../rest` listed as a table row.
+- [ ] The test harness builds a temp module and README per failure mode and
+      asserts exit code and message; it passes.
+- [ ] On the current tree the script fails and lists exactly the 20 contracts
+      not yet written; focused mode passes on `db`.
 
-**Verification:** nats module checks.
+**Verification:**
+- [ ] `bash -n .github/scripts/check-doc-contracts.sh`.
+- [ ] `bash .github/scripts/check-doc-contracts_test.sh`.
+- [ ] `bash .github/scripts/check-doc-contracts.sh github.com/fikrimohammad/go-servicekit/db`
+      exits 0.
 
-**Dependencies:** Checkpoint A · **Files:** `nats/producer/*`, `nats/consumer/*` (tests and seam removal) · **Scope:** L
+**Dependencies:** T2, T3
+**Files likely touched:**
+- `.github/scripts/check-doc-contracts.sh`
+- `.github/scripts/check-doc-contracts_test.sh`
 
-### Checkpoint A2
-- [x] Haiku review of T7–T8, with its fixes applied; CI is green.
+**Estimated scope:** S
 
-## Task 9: CI
+---
 
-**Description:** In `.github/workflows/ci.yml`:
-- Replace `STRICT_LINT_MODULES` with `LAX_MODULES: '["confloader"]'`, so `only-new-issues` is
-  set only for lax modules. Update the comment: the list may only shrink.
-- Add a "Style" step that runs gostyle on `./...` for non-lax modules.
-- Add a `gostyle` job that runs the gostyle self-test.
-- Add MySQL and PostgreSQL `services:` and set `DB_MYSQL_DSN`/`DB_POSTGRES_DSN` for the db
-  module only, so its integration tests run.
-- Add a `release-dry-run` job: `.github/scripts/release.sh "$(cat VERSION)" --dry-run` and
-  `release_test.sh`.
+### Checkpoint A: foundation
 
-**Acceptance criteria:**
-- [x] CI is green on the PR, with every new job present.
-- [x] The db job's log shows the integration tests ran, not skipped.
-- [x] Precision is checked again: gostyle reports 0 on every non-lax module after T5–T8.
+- [ ] The README map and both doc-only roots are in place.
+- [ ] The `db` exemplar renders all six sections.
+- [ ] The check script's tests pass; its only repo findings are unwritten
+      contracts.
+- [ ] Every module passes vet and test.
+- [ ] Reviewer approves the contract shape before the parallel wave.
 
-**Dependencies:** T3, T4, T5, T7, T8 · **Files:** `.github/workflows/ci.yml` · **Scope:** S
+---
 
-## Task 10: Docs
+## Task 5: `errs`, `errgroup`, `identity` contracts
 
-**Description:**
-- AGENTS.md: the Verification section and the Definition of done describe strict-by-default,
-  `LAX_MODULES`, gostyle in CI, the new path, and the release flow
-  (`release.sh` plus `release.yml`).
-- The go-best-practices skill: the two rules and their ignore syntax.
-- The opentelemetry-semconv skill: a pointer to the rules.
-- The module READMEs: install lines on the new path at v0.1.0. The testing recipes already
-  exist.
-- The backlog's key assumptions are ticked, with evidence links.
+**Description:** Write the three foundation contracts. `errs` keeps its current
+substance (codes, `errors.Is`, `SlogAttr`) and gains the six headings;
+`errgroup` (limit, panic safety) and `identity` (name/version/env) move their
+comments into `doc.go`.
 
 **Acceptance criteria:**
-- [x] The docs match the code and CI.
-- [x] `grep go-dev-sdk` is clean, as in T2.
+- [ ] Each `doc.go` has the six headings, 150–250 words excluding code, and
+      starts `Package <name>`.
+- [ ] Each package has exactly one `// Package ` comment, in `doc.go`.
+- [ ] Each snippet mirrors that package's `example_test.go`.
 
-**Dependencies:** T9 · **Files:** `AGENTS.md`, `.agents/skills/*/SKILL.md`, `*/README.md`, `docs/ideas/sdk-fix-backlog.md` · **Scope:** S
+**Verification:**
+- [ ] Module checks in `errs`, `errgroup`, `identity`.
+- [ ] `go doc -all .` in each package directory.
+- [ ] `check-doc-contracts.sh` with the three import paths exits 0.
 
-### Checkpoint B: complete
-- [x] SPEC-guardrails success criteria 1–8 are verified with evidence, including the rule's
-      recall and precision.
-- [x] Haiku review of T9–T10, then one Opus review of the whole PR (all tasks), with its fixes
-      applied.
-- [x] The PR body (prepared by the orchestrator) lists the path change, v0.1.0 and the release
-      runbook, the rules and their validation, and the kept stubs. The owner marks the PR
-      ready, or tells the orchestrator to.
+**Dependencies:** T3
+**Files likely touched:**
+- `errs/doc.go`, `errgroup/doc.go`, `errgroup/errgroup.go`
+- `identity/doc.go`, `identity/identity.go`
+
+**Estimated scope:** M
+
+---
+
+## Task 6: `redis`, `s3` contracts
+
+**Description:** Document the two storage clients. `redis` covers construction,
+pool lifecycle, and metrics/tracing; `s3` covers the client, multipart upload,
+and presigned URLs.
+
+**Acceptance criteria:**
+- [ ] Both contracts have the six headings, 150–250 words excluding code, and
+      start `Package <name>`.
+- [ ] Each package has exactly one `// Package ` comment, in `doc.go`.
+- [ ] Each snippet mirrors its package's `example_test.go`.
+
+**Verification:**
+- [ ] Module checks in `redis` and `s3`.
+- [ ] `go doc -all .` in each package directory.
+- [ ] `check-doc-contracts.sh` with both import paths exits 0.
+
+**Dependencies:** T3
+**Files likely touched:**
+- `redis/doc.go`, `redis/redis.go`
+- `s3/doc.go`, `s3/s3.go`
+
+**Estimated scope:** S
+
+---
+
+## Task 7: `cron`, `cron/engine` contracts
+
+**Description:** Document the job model and the engine: scheduling, start/stop,
+middleware, and the engine's lifecycle.
+
+**Acceptance criteria:**
+- [ ] Both contracts have the six headings, 150–250 words excluding code, and
+      start `Package <name>`.
+- [ ] Each package has exactly one `// Package ` comment, in `doc.go`.
+- [ ] Each snippet mirrors that package's `example_test.go`.
+
+**Verification:**
+- [ ] Module checks in `cron`.
+- [ ] `go doc -all .` in `cron` and `cron/engine`.
+- [ ] `check-doc-contracts.sh` with both import paths exits 0.
+
+**Dependencies:** T3
+**Files likely touched:**
+- `cron/doc.go`, `cron/cron.go`
+- `cron/engine/doc.go`, `cron/engine/engine.go`
+
+**Estimated scope:** S
+
+---
+
+## Task 8: `confloader`, `confloader/client` contracts
+
+**Description:** Document the loader (file + dynamic + secrets, `New`, `Data`)
+and the backend contract interface. `confloader/client` has no
+`example_test.go`; derive its snippet from the package tests and README.
+
+**Acceptance criteria:**
+- [ ] Both contracts have the six headings, 150–250 words excluding code, and
+      start `Package <name>`.
+- [ ] `confloader/client` names the contract role and the concrete backends
+      without documenting their constructors.
+- [ ] Each package has exactly one `// Package ` comment, in `doc.go`.
+
+**Verification:**
+- [ ] Module checks in `confloader` (LAX lint command).
+- [ ] `go doc -all .` in both package directories.
+- [ ] `check-doc-contracts.sh` with both import paths exits 0.
+
+**Dependencies:** T3
+**Files likely touched:**
+- `confloader/doc.go`, `confloader/confloader.go`
+- `confloader/client/doc.go`, `confloader/client/client.go`
+
+**Estimated scope:** S
+
+---
+
+## Task 9: `confloader/client/etcd`, `confloader/client/infisical` contracts
+
+**Description:** Document the two backends: constructors, config defaults,
+authentication, and `Close`. Neither has `example_test.go`; derive snippets from
+the package tests and README.
+
+**Acceptance criteria:**
+- [ ] Both contracts have the six headings, 150–250 words excluding code, and
+      start `Package <name>`.
+- [ ] Each states its config defaults and lifecycle explicitly.
+- [ ] Each package has exactly one `// Package ` comment, in `doc.go`.
+
+**Verification:**
+- [ ] Module checks in `confloader`.
+- [ ] `go doc -all .` in both package directories.
+- [ ] `check-doc-contracts.sh` with both import paths exits 0.
+
+**Dependencies:** T3
+**Files likely touched:**
+- `confloader/client/etcd/doc.go`, `confloader/client/etcd/etcd.go`
+- `confloader/client/infisical/doc.go`,
+  `confloader/client/infisical/infisical.go`
+
+**Estimated scope:** S
+
+---
+
+## Task 10: `rest/client`, `rest/server` contracts
+
+**Description:** Document the HTTP boundary. `rest/server` covers middleware
+order, `Error`/problem+json, request ID, and `Run`; `rest/client` covers `New`,
+retry, timeouts, the `RoundTripper`, and the no-propagation rule.
+
+**Acceptance criteria:**
+- [ ] Both contracts have the six headings, 150–250 words excluding code, and
+      start `Package <name>`.
+- [ ] The server states the fixed middleware order and the 5xx/4xx log levels;
+      the client states that it never propagates `traceparent` or
+      `X-Request-ID` and redacts query strings.
+- [ ] Each package has exactly one `// Package ` comment, in `doc.go`.
+
+**Verification:**
+- [ ] Module checks in `rest`.
+- [ ] `go doc -all .` in `rest/client` and `rest/server`.
+- [ ] `check-doc-contracts.sh` with both import paths exits 0.
+
+**Dependencies:** T3
+**Files likely touched:**
+- `rest/client/doc.go`, `rest/client/client.go`
+- `rest/server/doc.go`, `rest/server/server.go`
+
+**Estimated scope:** M
+
+---
+
+## Task 11: `nats/consumer`, `nats/producer` contracts
+
+**Description:** Document JetStream consumption (durable consumer, handler,
+lifecycle) and production (publish, headers, flush). The test recipe names the
+in-process NATS server used by the module's tests.
+
+**Acceptance criteria:**
+- [ ] Both contracts have the six headings, 150–250 words excluding code, and
+      start `Package <name>`.
+- [ ] The consumer states its ack/retry behavior; the producer states the
+      publish and flush lifecycle.
+- [ ] Each package has exactly one `// Package ` comment, in `doc.go`.
+
+**Verification:**
+- [ ] Module checks in `nats`.
+- [ ] `go doc -all .` in both package directories.
+- [ ] `check-doc-contracts.sh` with both import paths exits 0.
+
+**Dependencies:** T3
+**Files likely touched:**
+- `nats/consumer/doc.go`, `nats/consumer/consumer.go`
+- `nats/producer/doc.go`, `nats/producer/producer.go`
+
+**Estimated scope:** M
+
+---
+
+## Task 12: `observability` root, `attributes`, `logs` contracts
+
+**Description:** Rewrite the root as the wiring guide (no API): which package
+installs what and in which order. Document `attributes` key normalization and
+`logs` (logger install, `trace_id`).
+
+**Acceptance criteria:**
+- [ ] The root says it has no API and is the wiring guide; all three have the
+      six headings and 150–250 words excluding code.
+- [ ] Each package has exactly one `// Package ` comment, in `doc.go`.
+- [ ] Snippets mirror `example_test.go` in each package.
+
+**Verification:**
+- [ ] Module checks in `observability`.
+- [ ] `go doc -all .` in all three package directories.
+- [ ] `check-doc-contracts.sh` with the three import paths exits 0.
+
+**Dependencies:** T3
+**Files likely touched:**
+- `observability/doc.go`
+- `observability/attributes/doc.go`, `observability/attributes/attributes.go`
+- `observability/logs/doc.go`, `observability/logs/logs.go`
+
+**Estimated scope:** M
+
+---
+
+## Task 13: `observability/metrics`, `observability/tracer` contracts
+
+**Description:** Document the metrics and tracer clients: construction, config
+defaults, lifecycle, and the OTLP/gRPC exporter. No HTTP exporter option.
+
+**Acceptance criteria:**
+- [ ] Both contracts have the six headings, 150–250 words excluding code, and
+      start `Package <name>`.
+- [ ] Each states its config defaults and that the exporter is OTLP/gRPC.
+- [ ] Each package has exactly one `// Package ` comment, in `doc.go`.
+
+**Verification:**
+- [ ] Module checks in `observability`.
+- [ ] `go doc -all .` in both package directories.
+- [ ] `check-doc-contracts.sh` with both import paths exits 0.
+
+**Dependencies:** T3
+**Files likely touched:**
+- `observability/metrics/doc.go`, `observability/metrics/metrics.go`
+- `observability/tracer/doc.go`, `observability/tracer/tracer.go`
+
+**Estimated scope:** S
+
+---
+
+### Checkpoint B: contracts complete
+
+- [ ] `check-doc-contracts.sh` exits 0 on the whole tree.
+- [ ] `go doc -all` renders all 21 contracts; word counts are in range.
+- [ ] No exported signature changed (`git diff --stat` shows `doc.go` moves and
+      comment removals only).
+- [ ] Every module passes the full verification, including `-race`.
+- [ ] A reviewer spot-checks three contracts against the code.
+
+---
+
+## Task 14: Wire the contract check into CI
+
+**Description:** Add a `doc-contracts` job to `.github/workflows/ci.yml`:
+checkout, Go 1.26.5, run the script. No matrix, no Docker. Mention it in the
+README's CI section. Approved by the owner on 2026-11-08 (the spec lists CI
+workflow changes under "Ask first").
+
+**Acceptance criteria:**
+- [ ] The job runs on PRs and pushes to `main`, alongside the existing jobs,
+      and the README's CI section names it.
+- [ ] It invokes the script from the repo root and fails the PR on a contract
+      violation.
+- [ ] The approval is recorded (plan, 2026-11-08), and the PR notes it.
+
+**Verification:**
+- [ ] The workflow YAML parses.
+- [ ] The PR's CI run shows a green `doc-contracts` job.
+- [ ] Reverting one heading locally makes the job fail (checked in a scratch
+      branch).
+
+**Dependencies:** T4, T5–T13
+**Files likely touched:**
+- `.github/workflows/ci.yml`
+- `README.md`
+
+**Estimated scope:** S
+
+---
+
+## Task 15: Eval-kit protocol, correction log, `setup.sh`
+
+**Description:** Write the kit protocol (`docs/evals/agent-consumable-sdk/README.md`),
+the correction-log template, and `setup.sh`. The protocol is self-contained and
+harness-agnostic: fixed fixture, prompt, allowed files, done command, grader
+checklist, stop rule, correction definition.
+
+**Acceptance criteria:**
+- [ ] The README defines all protocol terms, names the six samples, and contains
+      no link to this conversation or the spec's internal debates.
+- [ ] `setup.sh <sample>` validates the sample, copies `fixtures/<sample>` to a
+      temp dir, adds replaces for all 11 modules found via `find -maxdepth 2
+      -name go.mod`, runs `go mod download`, and prints the workdir; no args or
+      an unknown sample exits 2 with usage.
+- [ ] `correction-log.md` has one row per correction: sample, file:line, kind,
+      reason, resolution.
+
+**Verification:**
+- [ ] `bash -n docs/evals/agent-consumable-sdk/setup.sh`.
+- [ ] `setup.sh` and `setup.sh nope` both exit 2 with usage.
+- [ ] `grep -c '^|' correction-log.md` shows the template row.
+
+**Dependencies:** T1
+**Files likely touched:**
+- `docs/evals/agent-consumable-sdk/README.md`
+- `docs/evals/agent-consumable-sdk/correction-log.md`
+- `docs/evals/agent-consumable-sdk/setup.sh`
+
+**Estimated scope:** S
+
+---
+
+## Task 16: `errs` sample (first complete kit)
+
+**Description:** Add `sample-errs.md` and `fixtures/errs`: a `go.mod` and a
+failing test that asks the agent to construct, wrap, and match an error by code,
+then log it with `SlogAttr`. This proves `setup.sh` end to end.
+
+**Acceptance criteria:**
+- [ ] `setup.sh errs` prints a workdir where `go mod download` succeeded and
+      `go test ./...` fails on the untouched fixture.
+- [ ] The prompt states goal, allowed file, done command, and stop rule; the
+      fixture needs only the SDK and the standard library.
+- [ ] The grader checklist names what counts as an SDK-usage correction for this
+      sample.
+
+**Verification:**
+- [ ] `setup.sh errs`, then `go test ./...` in the printed dir — fails.
+- [ ] `grep -rn 'spec\|conversation\|previous' sample-errs.md fixtures/errs` is
+      empty.
+- [ ] `go doc` in the workdir shows the `errs` contract.
+
+**Dependencies:** T15, T5
+**Files likely touched:**
+- `docs/evals/agent-consumable-sdk/sample-errs.md`
+- `docs/evals/agent-consumable-sdk/fixtures/errs/go.mod`
+- `docs/evals/agent-consumable-sdk/fixtures/errs/errors_test.go`
+
+**Estimated scope:** S
+
+---
+
+## Task 17: `db` sample
+
+**Description:** Add `sample-db.md` and `fixtures/db`: connect through the
+sqlmock driver, run a named query, and commit a transaction. The fixture pins
+`go-sqlmock` and fails until the agent wires the SDK correctly.
+
+**Acceptance criteria:**
+- [ ] `setup.sh db` yields a workdir where `go test ./...` fails on the untouched
+      fixture and the only SDK import needed is `.../db`.
+- [ ] The prompt states goal, allowed file, done command, stop rule, and grader
+      checklist.
+- [ ] The fixture pins `github.com/DATA-DOG/go-sqlmock` and documents the
+      network requirement.
+
+**Verification:**
+- [ ] `setup.sh db`, then `go test ./...` — fails as expected.
+- [ ] `grep -rn 'minio\|pgx' fixtures/db` is empty (no leaked old client).
+- [ ] The prompt names the sqlmock recipe from the `db` contract.
+
+**Dependencies:** T15, T3
+**Files likely touched:**
+- `docs/evals/agent-consumable-sdk/sample-db.md`
+- `docs/evals/agent-consumable-sdk/fixtures/db/go.mod`
+- `docs/evals/agent-consumable-sdk/fixtures/db/db_test.go`
+
+**Estimated scope:** S
+
+---
+
+## Task 18: `confloader` sample
+
+**Description:** Add `sample-confloader.md` and `fixtures/confloader`: implement a
+fake `client.Client`, load a struct through `New`/`Data`, and read a nested key.
+
+**Acceptance criteria:**
+- [ ] `setup.sh confloader` yields a workdir whose `go test ./...` fails until
+      the agent wires the loader.
+- [ ] The fixture's fake client is the only backend; no network.
+- [ ] The prompt states goal, allowed file, done command, stop rule, and grader
+      checklist.
+
+**Verification:**
+- [ ] `setup.sh confloader`, then `go test ./...` — fails as expected.
+- [ ] `go test` in the workdir does not dial etcd or Infisical.
+- [ ] The prompt references the `confloader/client` contract.
+
+**Dependencies:** T15, T8
+**Files likely touched:**
+- `docs/evals/agent-consumable-sdk/sample-confloader.md`
+- `docs/evals/agent-consumable-sdk/fixtures/confloader/go.mod`
+- `docs/evals/agent-consumable-sdk/fixtures/confloader/loader_test.go`
+
+**Estimated scope:** S
+
+---
+
+## Task 19: `rest/server` sample
+
+**Description:** Add `sample-rest-server.md` and `fixtures/rest-server`: build a
+server with one route and one `Error` response, then assert the problem+json body
+and the request ID header with `httptest`.
+
+**Acceptance criteria:**
+- [ ] `setup.sh rest-server` yields a workdir whose `go test ./...` fails until
+      the agent wires the server.
+- [ ] The test asserts status, `application/problem+json`, and the `request_id`
+      extension member.
+- [ ] The prompt states goal, allowed file, done command, stop rule, and grader
+      checklist.
+
+**Verification:**
+- [ ] `setup.sh rest-server`, then `go test ./...` — fails as expected.
+- [ ] The workdir test binds only `httptest`; no fixed port.
+- [ ] The prompt references the `rest/server` contract.
+
+**Dependencies:** T15, T10
+**Files likely touched:**
+- `docs/evals/agent-consumable-sdk/sample-rest-server.md`
+- `docs/evals/agent-consumable-sdk/fixtures/rest-server/go.mod`
+- `docs/evals/agent-consumable-sdk/fixtures/rest-server/server_test.go`
+
+**Estimated scope:** S
+
+---
+
+## Task 20: `observability` sample
+
+**Description:** Add `sample-observability.md` and `fixtures/observability`: wire
+logs, metrics, and tracer from config, emit one of each, and assert no exporter
+is required.
+
+**Acceptance criteria:**
+- [ ] `setup.sh observability` yields a workdir whose `go test ./...` fails until
+      the agent wires the three clients.
+- [ ] The fixture needs no collector; export errors are ignored by design.
+- [ ] The prompt states goal, allowed file, done command, stop rule, and grader
+      checklist.
+
+**Verification:**
+- [ ] `setup.sh observability`, then `go test ./...` — fails as expected.
+- [ ] The test does not bind a network port.
+- [ ] The prompt references the root wiring guide and the three client
+      contracts.
+
+**Dependencies:** T15, T12
+**Files likely touched:**
+- `docs/evals/agent-consumable-sdk/sample-observability.md`
+- `docs/evals/agent-consumable-sdk/fixtures/observability/go.mod`
+- `docs/evals/agent-consumable-sdk/fixtures/observability/wiring_test.go`
+
+**Estimated scope:** S
+
+---
+
+## Task 21: `nats/consumer` sample
+
+**Description:** Add `sample-nats-consumer.md` and `fixtures/nats-consumer`:
+start the in-process NATS server with JetStream, publish one message, consume it
+with the SDK consumer, and ack it.
+
+**Acceptance criteria:**
+- [ ] `setup.sh nats-consumer` yields a workdir whose `go test ./...` fails until
+      the agent wires the consumer.
+- [ ] The fixture pins `nats-server/v2` and starts it in-process with
+      `Port: -1`.
+- [ ] The prompt states goal, allowed file, done command, stop rule, and grader
+      checklist.
+
+**Verification:**
+- [ ] `setup.sh nats-consumer`, then `go test ./...` — fails as expected.
+- [ ] The workdir test opens no external connection.
+- [ ] The prompt references the `nats/consumer` contract.
+
+**Dependencies:** T15, T11
+**Files likely touched:**
+- `docs/evals/agent-consumable-sdk/sample-nats-consumer.md`
+- `docs/evals/agent-consumable-sdk/fixtures/nats-consumer/go.mod`
+- `docs/evals/agent-consumable-sdk/fixtures/nats-consumer/consumer_test.go`
+
+**Estimated scope:** S
+
+---
+
+### Checkpoint C: kit complete
+
+- [ ] All six samples run through `setup.sh`; each done command fails untouched.
+- [ ] The protocol, correction log, and prompts are self-contained.
+- [ ] The CI `doc-contracts` job is green on the PR.
+- [ ] Reviewer approves the kit before the eval runs.
+
+---
+
+## Task 22: Fresh-agent dry run
+
+**Description:** Hand the `errs` kit to a fresh agent that sees only the kit and
+the workdir. Record every question and every doc defect. Fix kit defects; file
+contract defects for the owning task.
+
+**Acceptance criteria:**
+- [ ] The agent completes the sample, or stops per the stop rule, without asking
+      a question the kit should have answered.
+- [ ] Every question is recorded and either fixed in the kit or filed as a
+      finding.
+- [ ] The dry run needs no SDK-usage correction.
+
+**Verification:**
+- [ ] The transcript is linked in the PR.
+- [ ] `git diff` of kit fixes is limited to `docs/evals/`.
+- [ ] The agent's commands include `go doc` (recorded in the transcript).
+
+**Dependencies:** T16–T21
+**Files likely touched:** `docs/evals/agent-consumable-sdk/**`
+**Estimated scope:** S
+
+---
+
+## Task 23: Run the six sample evals
+
+**Description:** Run each sample with a fresh agent, grade the diff against the
+checklist, and fill `correction-log.md`. Findings name the package and the
+missing capability; nothing is fixed in the SDK.
+
+**Acceptance criteria:**
+- [ ] Each sample's done command passes.
+- [ ] Zero SDK-usage corrections, or every correction has a finding naming the
+      package and the missing API.
+- [ ] No shim in any diff; the correction log is complete.
+
+**Verification:**
+- [ ] `correction-log.md` has a row per run, even when empty.
+- [ ] `grep -rn 'type .*shim\|adapter'` over the diffs is empty.
+- [ ] The PR lists the findings.
+
+**Dependencies:** T22
+**Files likely touched:** `docs/evals/agent-consumable-sdk/correction-log.md`
+**Estimated scope:** S
+
+---
+
+### Checkpoint D: eval proof
+
+- [ ] Zero corrections, or every correction logged as a finding.
+- [ ] No shim in any diff.
+- [ ] Findings are attached to the PR and will be in the release notes.
+
+---
+
+## Task 24: Bump `VERSION` and sibling requires to `v0.1.1`
+
+**Description:** Bump `VERSION`, all 11 sibling `require`s, and the README
+version line. The diff is mechanical and atomic; it is an accepted exception to
+the 5-file guideline.
+
+**Acceptance criteria:**
+- [ ] `release.sh "$(cat VERSION)" --check` passes.
+- [ ] Every sibling `require` is `v0.1.1`; no `v0.1.0` sibling remains.
+- [ ] The README "Versioning" section says `v0.1.1`.
+
+**Verification:**
+- [ ] `.github/scripts/release.sh "$(cat VERSION)" --check`.
+- [ ] `grep -rn 'go-servicekit/[a-z/]* v0.1.0' --include=go.mod .` is empty.
+- [ ] `git diff --stat` lists `VERSION`, 11 `go.mod` files, and `README.md`.
+
+**Dependencies:** T23
+**Files likely touched:**
+- `VERSION`
+- `errs/go.mod`, `errgroup/go.mod`, `identity/go.mod`, `observability/go.mod`,
+  `confloader/go.mod`, `rest/go.mod`, `cron/go.mod`, `db/go.mod`,
+  `nats/go.mod`, `redis/go.mod`, `s3/go.mod`
+- `README.md`
+
+**Estimated scope:** M (mechanical)
+
+---
+
+## Task 25: Tag every module and verify proxy installs
+
+**Description:** Run the release workflow on `main` for `v0.1.1`; wait for the
+verify-install job. Draft release notes listing the six samples and any findings.
+
+**Acceptance criteria:**
+- [ ] 11 tags `<module>/v0.1.1` exist on one commit.
+- [ ] The `verify-install` job is green; every module installs from
+      proxy.golang.org.
+- [ ] Release notes state docs-only and list the findings.
+
+**Verification:**
+- [ ] `gh workflow run release.yml` completes; the run URL is in the PR.
+- [ ] `git ls-remote --tags origin '*/v0.1.1'` lists 11 tags.
+- [ ] In a temp module, `go get github.com/fikrimohammad/go-servicekit/db@v0.1.1`
+      succeeds.
+
+**Dependencies:** T24
+**Files likely touched:** None (tags and release notes)
+**Estimated scope:** S
+
+---
+
+## Task 26: Spot-check `db` and `errs` against `v0.1.1`
+
+**Description:** Re-run two samples from the proxy version: remove the replaces,
+`go get @v0.1.1`, and run the done command. This proves the contracts travel in
+the module cache.
+
+**Acceptance criteria:**
+- [ ] Both done commands pass without local replaces.
+- [ ] `go doc` from the proxy version shows all six headings.
+- [ ] No corrections; any gap is logged.
+
+**Verification:**
+- [ ] The two temp workdirs have no `replace` lines.
+- [ ] `go test ./...` passes in both.
+- [ ] `go doc -all github.com/fikrimohammad/go-servicekit/db` shows the headings.
+
+**Dependencies:** T25
+**Files likely touched:** None (temporary copies)
+**Estimated scope:** S
+
+---
+
+### Checkpoint E: release
+
+- [ ] 11 tags at `v0.1.1` on one commit; verify-install green.
+- [ ] Spot checks pass with no replaces.
+- [ ] Spec success criteria 1–8 hold; the PR is merged.
