@@ -123,9 +123,9 @@ Details, acceptance criteria, and verification are in [todo.md](todo.md).
 - [x] T23: Run the six sample evals and fill the correction log
 
 ### Checkpoint D: eval proof
-- [ ] Zero SDK-usage corrections, or every one logged as a finding
-- [ ] No shim in any diff
-- [ ] Findings are attached to the PR
+- [x] Zero SDK-usage corrections, or every one logged as a finding
+- [x] No shim in any diff
+- [x] Findings are attached to the PR (none)
 
 ### Phase 5: Release (deferred 2026-11-08)
 - [x] T24: Bump `VERSION` and sibling requires to `v0.1.1`
