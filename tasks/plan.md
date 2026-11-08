@@ -103,7 +103,7 @@ Details, acceptance criteria, and verification are in [todo.md](todo.md).
 - [x] T15: Eval-kit protocol, correction log, `setup.sh`
 - [x] T16: `errs` sample (first complete kit)
 - [x] T17: `db` sample
-- [ ] T18: `confloader` sample
+- [x] T18: `confloader` sample
 - [ ] T19: `rest/server` sample
 - [ ] T20: `observability` sample
 - [ ] T21: `nats/consumer` sample
