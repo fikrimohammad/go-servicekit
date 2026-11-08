@@ -24,6 +24,10 @@ finding, not fixed here; the catalog migration is a separate project.
 This plan replaces the completed guardrails plan (all tasks checked; PR #19
 merged). The previous plan stays in git history.
 
+**Status 2026-11-08:** T1–T24 are complete and verified on PR #21. The owner
+chose to stop before the release; T25–T26 stay open until the PR is reviewed and
+merged.
+
 ## Execution
 
 - Branch `feat/agent-consumable-sdk` off `main`; one commit per task, subject
@@ -123,15 +127,18 @@ Details, acceptance criteria, and verification are in [todo.md](todo.md).
 - [ ] No shim in any diff
 - [ ] Findings are attached to the PR
 
-### Phase 5: Release
+### Phase 5: Release (deferred 2026-11-08)
 - [x] T24: Bump `VERSION` and sibling requires to `v0.1.1`
 - [ ] T25: Tag every module; verify proxy installs
 - [ ] T26: Spot-check `db` and `errs` against `v0.1.1`
 
-### Checkpoint E: release
+### Checkpoint E: release (deferred 2026-11-08)
 - [ ] 11 tags at `v0.1.1` on one commit; verify-install job green
 - [ ] Spot checks pass with no replaces
 - [ ] Success criteria 1–8 of the spec hold
+
+To resume: review and merge PR #21, then run T25 (`gh workflow run release.yml`)
+and T26 (proxy spot check). `release.sh v0.1.1 --check` already passes.
 
 ## Parallelization
 
