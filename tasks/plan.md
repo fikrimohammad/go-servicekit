@@ -86,7 +86,7 @@ Details, acceptance criteria, and verification are in [todo.md](todo.md).
 - [x] T7: `cron`, `cron/engine`
 - [x] T8: `confloader`, `confloader/client`
 - [x] T9: `confloader/client/etcd`, `confloader/client/infisical`
-- [ ] T10: `rest/client`, `rest/server`
+- [x] T10: `rest/client`, `rest/server`
 - [ ] T11: `nats/consumer`, `nats/producer`
 - [ ] T12: `observability` root, `observability/attributes`, `observability/logs`
 - [ ] T13: `observability/metrics`, `observability/tracer`
