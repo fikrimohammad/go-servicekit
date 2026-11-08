@@ -106,7 +106,7 @@ Details, acceptance criteria, and verification are in [todo.md](todo.md).
 - [x] T18: `confloader` sample
 - [x] T19: `rest/server` sample
 - [x] T20: `observability` sample
-- [ ] T21: `nats/consumer` sample
+- [x] T21: `nats/consumer` sample
 
 ### Checkpoint C: kit complete
 - [ ] `setup.sh <sample>` works for all six; each done command fails on its
