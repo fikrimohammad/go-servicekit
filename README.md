@@ -2,23 +2,38 @@
 
 Personal go-to SDK for building Go applications.
 
-## Modules
+## Import map
 
-Each package is an independent Go module, importable directly:
+The SDK is 11 Go modules. These are the public import paths, by task:
 
-| Module | Import path | Purpose |
+| I need | Import | Notes |
 | --- | --- | --- |
-| `errs` | `github.com/fikrimohammad/go-servicekit/errs` | Structured errors carrying an integer code, cause, metadata, and stack |
-| `errgroup` | `github.com/fikrimohammad/go-servicekit/errgroup` | Concurrency-limited, panic-safe errgroup wrapper |
-| `identity` | `github.com/fikrimohammad/go-servicekit/identity` | Standardized service identity (name/version/env) |
-| `observability` | `github.com/fikrimohammad/go-servicekit/observability` | OpenTelemetry logs, metrics, and traces |
-| `confloader` | `github.com/fikrimohammad/go-servicekit/confloader` | Layered config: file + dynamic (etcd) + secrets (Infisical) |
-| `rest` | `github.com/fikrimohammad/go-servicekit/rest` | Hertz HTTP server and client for gateway services: fixed telemetry, edge-safe defaults, RFC 9457 errors |
-| `cron` | `github.com/fikrimohammad/go-servicekit/cron` | Recurring job scheduler with robfig/cron and middleware pipeline |
-| `db` | `github.com/fikrimohammad/go-servicekit/db` | sqlx-based MySQL/PostgreSQL pool with named queries and telemetry |
-| `nats` | `github.com/fikrimohammad/go-servicekit/nats` | NATS JetStream producer/consumer with middleware and telemetry |
-| `redis` | `github.com/fikrimohammad/go-servicekit/redis` | Redis client with metrics/tracing |
-| `s3` | `github.com/fikrimohammad/go-servicekit/s3` | AWS S3 client with multipart upload and presigned URLs |
+| An error with a code, cause, metadata, and stack | `github.com/fikrimohammad/go-servicekit/errs` | Structured errors; slog attribute |
+| Concurrency with a limit and panic safety | `github.com/fikrimohammad/go-servicekit/errgroup` | Wraps `golang.org/x/sync/errgroup` |
+| A standard service name, version, and env | `github.com/fikrimohammad/go-servicekit/identity` | Used by observability |
+| To wire logs, metrics, and traces | `github.com/fikrimohammad/go-servicekit/observability` | Wiring guide; no API |
+| To normalize attribute keys | `github.com/fikrimohammad/go-servicekit/observability/attributes` | Key normalization |
+| A logger with trace context | `github.com/fikrimohammad/go-servicekit/observability/logs` | slog handler; trace_id |
+| Counters, histograms, gauges | `github.com/fikrimohammad/go-servicekit/observability/metrics` | Metrics client |
+| Spans and a tracer client | `github.com/fikrimohammad/go-servicekit/observability/tracer` | Tracer client |
+| Layered config and secrets | `github.com/fikrimohammad/go-servicekit/confloader` | File + dynamic + secrets |
+| To implement a config backend | `github.com/fikrimohammad/go-servicekit/confloader/client` | Backend contract |
+| etcd-backed dynamic config | `github.com/fikrimohammad/go-servicekit/confloader/client/etcd` | etcd backend |
+| Infisical-backed secrets | `github.com/fikrimohammad/go-servicekit/confloader/client/infisical` | Infisical backend |
+| An HTTP client for vendors | `github.com/fikrimohammad/go-servicekit/rest/client` | Hertz; retry, timeouts, RoundTripper |
+| An HTTP server at the edge | `github.com/fikrimohammad/go-servicekit/rest/server` | Hertz; problem+json, request ID |
+| To schedule recurring jobs | `github.com/fikrimohammad/go-servicekit/cron` | Job model |
+| To run the scheduler | `github.com/fikrimohammad/go-servicekit/cron/engine` | Engine |
+| SQL persistence | `github.com/fikrimohammad/go-servicekit/db` | MySQL/PostgreSQL; named queries |
+| To consume JetStream messages | `github.com/fikrimohammad/go-servicekit/nats/consumer` | Durable consumer |
+| To publish JetStream messages | `github.com/fikrimohammad/go-servicekit/nats/producer` | Producer |
+| A Redis client | `github.com/fikrimohammad/go-servicekit/redis` | Metrics and tracing |
+| S3 objects and presigned URLs | `github.com/fikrimohammad/go-servicekit/s3` | Multipart upload |
+
+`github.com/fikrimohammad/go-servicekit/nats` and
+`github.com/fikrimohammad/go-servicekit/rest` are module roots with no
+importable package; use the subpackages above. Importing a root compiles to an
+empty package only so `go doc` can point you to them.
 
 ## Development
 

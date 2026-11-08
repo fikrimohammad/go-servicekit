@@ -69,7 +69,7 @@ Details, acceptance criteria, and verification are in [todo.md](todo.md).
 
 ### Phase 1: Foundation
 - [x] T1: Commit the re-scoped docs and this plan; open a draft PR
-- [ ] T2: Root import map and doc-only `nats`/`rest` roots
+- [x] T2: Root import map and doc-only `nats`/`rest` roots
 - [ ] T3: Contract shape and the `db` exemplar
 - [ ] T4: `check-doc-contracts.sh` plus its test harness
 
