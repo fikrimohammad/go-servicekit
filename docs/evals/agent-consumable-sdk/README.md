@@ -14,7 +14,7 @@ need any other context about the SDK.
 | `setup.sh` | Copies a fixture, points its SDK modules at this working tree, downloads deps, prints the workdir |
 | `correction-log.md` | The template the grader fills for every run |
 
-Samples: `db`, `errs`, `confloader`, `rest-server`, `observability`,
+Samples: `db`, `errs`, `conf`, `rest-server`, `observability`,
 `nats-consumer`.
 
 ## Protocol

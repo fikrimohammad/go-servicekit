@@ -1,169 +1,116 @@
-# Implementation Plan: agent-consumable-sdk (docs-only)
+# Implementation Plan: conf
 
-Spec: [SPEC-agent-consumable-sdk](../docs/specs/agent-consumable-sdk/SPEC-agent-consumable-sdk.md)
-(re-scoped 2026-11-08). Intent:
-[docs/intent/agent-consumable-sdk.md](../docs/intent/agent-consumable-sdk.md). Idea:
-[docs/ideas/agent-consumable-sdk.md](../docs/ideas/agent-consumable-sdk.md). Tasks:
-[todo.md](todo.md).
+Spec: [SPEC-conf](../docs/specs/conf/SPEC-conf.md). Idea:
+[docs/ideas/conf.md](../docs/ideas/conf.md). Tasks: [todo.md](todo.md).
 
 ## Overview
 
-One PR on branch `feat/agent-consumable-sdk`, one commit per task. It ships
-documentation only:
+Build the `conf` module: one loader binds one provider, every leaf is a typed
+`Getter`, reads are I/O-free, boot is strict, hot config follows an etcd watch,
+and the file provider preserves its source format. Replace `confloader` and
+empty `LAX_MODULES`.
 
-- **Contracts:** a `doc.go` for all 21 public import paths with the six headings,
-  plus a task→package root README and doc-only `nats`/`rest` roots.
-- **Guard:** `.github/scripts/check-doc-contracts.sh`, its test harness, and a CI
-  job.
-- **Proof:** a self-contained eval kit with six in-process sample evals.
-- **Release:** `v0.1.1`, docs only.
+This plan replaces the completed agent-consumable-sdk plan (all tasks done).
 
-No exported API changes. A capability an eval finds missing is recorded as a
-finding, not fixed here; the catalog migration is a separate project.
-
-This plan replaces the completed guardrails plan (all tasks checked; PR #19
-merged). The previous plan stays in git history.
-
-**Status 2026-11-08:** T1–T24 are complete and verified on PR #21. The owner
-chose to stop before the release; T25–T26 stay open until the PR is reviewed and
-merged.
-
-## Execution
-
-- Branch `feat/agent-consumable-sdk` off `main`; one commit per task, subject
-  `<type>(<area>): <summary> (T<n>)`.
-- Run the touched module's verification before each commit; tick the task in
-  [todo.md](todo.md).
-- Checkpoints are review gates: the owner (or a reviewer agent) signs off before
-  the next phase.
-- Tasks within a wave touch disjoint files and can run in parallel; see
-  Parallelization.
-- **Eval runner:** delegated by the owner (2026-11-08); T22–T23 use a fresh
-  agent that sees only the kit and the workdir.
+**Status 2026-11-08:** T1–T22 are implemented on `feat/conf-module`. Unit,
+race, lint, gostyle, and doc-contract checks pass. The etcd integration tests
+pass against a local etcd 3.5.17 (root loader, watch, compaction resync).
 
 ## Architecture Decisions
 
-- **One package comment, in `doc.go`.** Every package in the set gets a
-  `doc.go`; where the comment currently lives in `<pkg>.go`, it moves. The check
-  enforces exactly one `// Package ` comment per package.
-- **The check derives the package set.** It runs `go list` per module with
-  `GOWORK=off`, excludes `/internal/` and test-only packages, and accepts
-  optional import paths so a mid-project task can check only its own packages.
-  README coverage is checked by exact path; `.../nats` and `.../rest` are the
-  declared doc-only roots, never table rows.
-- **The import map lists 21 rows.** `nats` and `rest` appear only in a "module
-  roots are not importable" note; `observability` stays a row because it is the
-  wiring guide (no API).
-- **The eval kit is prose + `setup.sh` + static fixtures.** `setup.sh <sample>`
-  copies a fixture to a temp dir, adds `replace` directives for all 11 SDK
-  modules, runs `go mod download`, prints the workdir. No harness, no CI agent
-  runs.
-- **Evals run against the working tree; the tag is spot-checked.** Fixtures use
-  local replaces pre-release; after `v0.1.1`, two samples re-run from the proxy
-  without replaces.
-- **The release bump is atomic.** `VERSION`, 11 sibling `require`s, and the
-  README version line change together; that is a mechanical exception to the
-  5-file task guideline.
-- **Order:** contracts before prompts, prompts before evals, evals before the
-  release. Catalog is out.
+- **One loader, one provider.** `conf.New[T](ctx, p, opts...)`; `providers/file`
+  and `providers/etcd` are separate packages. No merge or precedence.
+- **Provider capabilities.** `Provider` (Source, Load, Close) is required;
+  `Watcher` (Watch) and `Formatter` (Format) are optional type assertions.
+- **Format ownership.** `Formatter` means the provider owns one format for every
+  value (file). Its absence means every leaf must carry `format=` (etcd). No
+  default and no sniffing.
+- **Reads are pure.** `Getter[T].Get` / `GetWithDefault` load an immutable
+  copy-on-write snapshot; per-key atomicity, no cross-key transaction.
+- **Strict boot, lenient runtime.** `New` fails on missing/unparseable keys;
+  a bad watch value keeps last-known-good and sets `StateDegraded`.
+- **No callbacks.** `State()` and OTel carry health; values are read at use.
+- **Delete `confloader`.** No shim; the SDK is pre-1.0 and has no in-repo
+  importers.
 
 ## Task List
 
-Details, acceptance criteria, and verification are in [todo.md](todo.md).
-
 ### Phase 1: Foundation
-- [x] T1: Commit the re-scoped docs and this plan; open a draft PR
-- [x] T2: Root import map and doc-only `nats`/`rest` roots
-- [x] T3: Contract shape and the `db` exemplar
-- [x] T4: `check-doc-contracts.sh` plus its test harness
 
-### Checkpoint A: foundation
-- [x] README map lists 21 paths; `nats`/`rest` roots render under `go doc`
-- [x] The `db` contract renders all six headings
-- [x] The check script's tests pass; its only repo findings are the 20 unwritten
-      contracts
-- [x] Every module still passes vet and test
+- [x] T1: Create the `conf` module skeleton and `go.work` entry
+- [x] T2: `Format` type, parsing, and scalar decoder
+- [x] T3: `Getter[T]` and the `getterLeaf` binding marker
+- [x] T4: `Provider`, `Watcher`, `Formatter`, `Event`, and sentinels
+- [x] T5: Key derivation, tags, collisions, and the golden-key test
 
-### Phase 2: Contracts (parallel)
-- [x] T5: `errs`, `errgroup`, `identity`
-- [x] T6: `redis`, `s3`
-- [x] T7: `cron`, `cron/engine`
-- [x] T8: `confloader`, `confloader/client`
-- [x] T9: `confloader/client/etcd`, `confloader/client/infisical`
-- [x] T10: `rest/client`, `rest/server`
-- [x] T11: `nats/consumer`, `nats/producer`
-- [x] T12: `observability` root, `observability/attributes`, `observability/logs`
-- [x] T13: `observability/metrics`, `observability/tracer`
+**Checkpoint 1:** `conf` builds; format/getter/key tests pass; derivation is
+locked by `testdata/keys.golden`.
 
-### Checkpoint B: contracts complete
-- [x] `check-doc-contracts.sh` passes on the whole tree
-- [x] All 21 contracts render under `go doc -all`; each is 150–250 words with no
-      code counted
-- [x] No exported API changed; every module passes vet, test, and lint
-- [ ] Reviewer spot-checks three contracts against the code
+### Phase 2: Loader
 
-### Phase 3: CI and eval kit
-- [x] T14: Wire the contract check into CI (owner approval required)
-- [x] T15: Eval-kit protocol, correction log, `setup.sh`
-- [x] T16: `errs` sample (first complete kit)
-- [x] T17: `db` sample
-- [x] T18: `confloader` sample
-- [x] T19: `rest/server` sample
-- [x] T20: `observability` sample
-- [x] T21: `nats/consumer` sample
+- [x] T6: `conf.New` with a fake provider: load, strict boot, bind, Data, Close
+- [x] T7: `State` and degradation tracking
+- [x] T8: Watch consumption: put, delete, reset, heartbeat, error
+- [x] T9: Telemetry: spans, metrics, logs, defaults
 
-### Checkpoint C: kit complete
-- [x] `setup.sh <sample>` works for all six; each done command fails on its
-      untouched fixture
-- [x] The protocol, correction log, and prompts are self-contained
-- [x] The CI doc-contracts job is green on the PR
+**Checkpoint 2:** loader end-to-end with a fake provider; `-race` passes;
+telemetry contract tests pass.
 
-### Phase 4: Proof
-- [x] T22: Fresh-agent dry run; record kit defects
-- [x] T23: Run the six sample evals and fill the correction log
+### Phase 3: File provider
 
-### Checkpoint D: eval proof
-- [x] Zero SDK-usage corrections, or every one logged as a finding
-- [x] No shim in any diff
-- [x] Findings are attached to the PR (none)
+- [x] T10: `file.Config` defaults and validation
+- [x] T11: `file.Provider`, `Formatter`, strict document walk, raw values
+- [x] T12: File tests: YAML/JSON/TOML, custom unmarshalers, large ints, TOML dates
+- [x] T13: File example and `doc.go`
 
-### Phase 5: Release (deferred 2026-11-08)
-- [x] T24: Bump `VERSION` and sibling requires to `v0.1.1`
-- [ ] T25: Tag every module; verify proxy installs
-- [ ] T26: Spot-check `db` and `errs` against `v0.1.1`
+**Checkpoint 3:** a real file loads end-to-end through `conf.New`; missing,
+unknown, and unparseable keys fail boot.
 
-### Checkpoint E: release (deferred 2026-11-08)
-- [ ] 11 tags at `v0.1.1` on one commit; verify-install job green
-- [ ] Spot checks pass with no replaces
-- [ ] Success criteria 1–8 of the spec hold
+### Phase 4: Etcd provider
 
-To resume: review and merge PR #21, then run T25 (`gh workflow run release.yml`)
-and T26 (proxy spot check). `release.sh v0.1.1 --check` already passes.
+- [x] T14: `etcd.Config` defaults and validation
+- [x] T15: `etcd.Provider.Load`: client, prefix `Get`, key filter, revision
+- [x] T16: `etcd.Provider.Watch`: events, heartbeat, backoff, compaction resync
+- [x] T17: Etcd integration tests, example, and `doc.go`
 
-## Parallelization
+**Checkpoint 4:** a real etcd loads and watches; a `PUT` is visible in under 1s;
+a `DELETE` is absent; a compaction resync recovers.
 
-- **Wave 1:** T2 and T3 in parallel (disjoint files); T4 after both.
-- **Wave 2:** T5–T13 in parallel, capped at four concurrent tasks; each touches
-  only its own packages.
-- **Wave 3:** T14 and T15 in parallel; then T16–T21 in parallel, capped at
-  three; each sample depends on its package contract.
-- **Wave 4:** T22 → T23 sequential; they need the owner's eval runner.
-- **Release:** T24 → T25 → T26 sequential.
+### Phase 5: Acceptance and migration
+
+- [x] T18: Loader end-to-end integration through the etcd provider
+- [x] T19: Package examples and README
+- [x] T20: `doc.go` for `conf` and both providers in the house format
+- [x] T21: Delete `confloader`; update `go.work`, `LAX_MODULES`, root README
+- [x] T22: Final verification and spec success-criteria audit
+
+**Checkpoint 5:** every Command passes; the spec's Success Criteria are checked;
+the module is ready for review.
 
 ## Risks and Mitigations
 
 | Risk | Impact | Mitigation |
 | --- | --- | --- |
-| A contract drifts from the real API | High | Author from `go doc -all` and `example_test.go`; reviewer spot-checks three; sample evals catch wiring errors |
-| The check is brittle (test-only packages, internals, roots) | Med | Test harness covers each failure mode and each exclusion; optional path args; README rules stated explicitly |
-| `setup.sh` misses a transitive sibling replace | Med | It writes replaces for all 11 modules unconditionally; each sample smoke-tests it |
-| Fixtures need network and pinned deps (sqlmock, nats-server) | Low | `go mod download` in setup; versions pinned in each fixture; the kit states the Go-only requirement |
-| Eval runner variance masks a doc defect | Med | Fixed prompt, allowed files, done command, dry run first; every question becomes a kit defect |
-| CI wiring is declined or delayed | Low | T14 is gated; the check still runs from the PR body and locally |
-| 21 contracts are the critical path; a slip moves the release | Med | Parallel waves; Checkpoint B gates the kit; spec says the release slips, not the check |
-| The version bump misses a sibling `require` | Low | `release.sh "$(cat VERSION)" --check`; one atomic commit |
+| Etcd compaction/reconnect is the hardest part | High | T16 is isolated, integration-tested, and lands before acceptance; force compaction in T17 |
+| `Getter` reflection binding | Medium | T3/T5 test the marker, binding, and zero value before the loader exists |
+| Format-specific unmarshalers regress | High | T12 asserts `UnmarshalJSON`/`UnmarshalYAML`/`UnmarshalTOML`, a large JSON int, and a TOML date |
+| Telemetry names drift from the contract | Medium | T9 asserts exact names, units, kinds, and attributes; T22 re-runs it |
+| Strict lint on a new module | Medium | T1 uses the sibling `go.mod` shape; run `golangci-lint` and gostyle from T1 |
+| Deleting `confloader` breaks an unseen consumer | Low | No in-repo importers; pre-1.0; release notes call it out |
+
+## Parallelization
+
+After Checkpoint 1, three streams are independent because the loader uses a
+fake provider:
+
+- **Stream A:** T6 → T7 → T8 → T9 (loader).
+- **Stream B:** T10 → T11 → T12 → T13 (file provider).
+- **Stream C:** T14 → T15 → T16 → T17 (etcd provider).
+
+T18 needs T8 and T16. T21 needs T6, T11, and T15. T19/T20 need both providers.
+T22 is last.
 
 ## Open Questions
 
-None. Resolved 2026-11-08: the CI workflow change is approved; the eval runner
-is delegated by the owner (T22–T23 use a fresh agent with kit-only context).
+None from the spec. Release tagging is manual and out of scope for this plan;
+the module ships at the shared `VERSION` when the owner runs `release.yml`.

@@ -18,7 +18,7 @@ env:
   # Every module is strict (full-tree golangci-lint and gostyle) unless it is listed
   # here. The list may only shrink: remove a module in the commit that makes it clean.
   # Never add one without the owner's approval.
-  LAX_MODULES: '["confloader"]'
+  LAX_MODULES: '[]'
 
 jobs:
   modules:

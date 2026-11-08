@@ -16,10 +16,9 @@ The SDK is 11 Go modules. These are the public import paths, by task:
 | A logger with trace context | `github.com/fikrimohammad/go-servicekit/observability/logs` | slog handler; trace_id |
 | Counters, histograms, gauges | `github.com/fikrimohammad/go-servicekit/observability/metrics` | Metrics client |
 | Spans and a tracer client | `github.com/fikrimohammad/go-servicekit/observability/tracer` | Tracer client |
-| Layered config and secrets | `github.com/fikrimohammad/go-servicekit/confloader` | File + dynamic + secrets |
-| To implement a config backend | `github.com/fikrimohammad/go-servicekit/confloader/client` | Backend contract |
-| etcd-backed dynamic config | `github.com/fikrimohammad/go-servicekit/confloader/client/etcd` | etcd backend |
-| Infisical-backed secrets | `github.com/fikrimohammad/go-servicekit/confloader/client/infisical` | Infisical backend |
+| Typed config from file or etcd | `github.com/fikrimohammad/go-servicekit/conf` | One loader, one provider; strict boot |
+| File config provider | `github.com/fikrimohammad/go-servicekit/conf/providers/file` | YAML, JSON, TOML |
+| Etcd hot config provider | `github.com/fikrimohammad/go-servicekit/conf/providers/etcd` | Watch, resync, per-key formats |
 | An HTTP client for vendors | `github.com/fikrimohammad/go-servicekit/rest/client` | Hertz; retry, timeouts, RoundTripper |
 | An HTTP server at the edge | `github.com/fikrimohammad/go-servicekit/rest/server` | Hertz; problem+json, request ID |
 | To schedule recurring jobs | `github.com/fikrimohammad/go-servicekit/cron` | Job model |
@@ -57,9 +56,8 @@ GitHub Actions workflows live in `.github/workflows/`:
 - **`ci.yml`** — on PR + push to main. Discovers every Go module and runs a
   matrix job per module: `gofmt`, `golangci-lint` (config at repo root,
   `.golangci.yml`), `go vet`, `go test` (plus `-race`), and a
-  `go mod tidy -diff` check. Every module except those in `LAX_MODULES` (today
-  only `confloader`) is linted on the full tree and checked by gostyle.
-  gostyle also has its own test job.
+  `go mod tidy -diff` check. Every module is linted on the full tree and
+  checked by gostyle. gostyle also has its own test job.
 - **`doc-contracts`** job in `ci.yml` runs
   `.github/scripts/check-doc-contracts.sh` and its tests: every public package
   must have a `doc.go` contract and a row in the import map.
