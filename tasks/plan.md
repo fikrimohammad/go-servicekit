@@ -71,7 +71,7 @@ Details, acceptance criteria, and verification are in [todo.md](todo.md).
 - [x] T1: Commit the re-scoped docs and this plan; open a draft PR
 - [x] T2: Root import map and doc-only `nats`/`rest` roots
 - [x] T3: Contract shape and the `db` exemplar
-- [ ] T4: `check-doc-contracts.sh` plus its test harness
+- [x] T4: `check-doc-contracts.sh` plus its test harness
 
 ### Checkpoint A: foundation
 - [ ] README map lists 21 paths; `nats`/`rest` roots render under `go doc`
