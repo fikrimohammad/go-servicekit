@@ -85,7 +85,7 @@ Details, acceptance criteria, and verification are in [todo.md](todo.md).
 - [x] T6: `redis`, `s3`
 - [x] T7: `cron`, `cron/engine`
 - [x] T8: `confloader`, `confloader/client`
-- [ ] T9: `confloader/client/etcd`, `confloader/client/infisical`
+- [x] T9: `confloader/client/etcd`, `confloader/client/infisical`
 - [ ] T10: `rest/client`, `rest/server`
 - [ ] T11: `nats/consumer`, `nats/producer`
 - [ ] T12: `observability` root, `observability/attributes`, `observability/logs`
