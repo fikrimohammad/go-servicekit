@@ -89,7 +89,7 @@ Details, acceptance criteria, and verification are in [todo.md](todo.md).
 - [x] T10: `rest/client`, `rest/server`
 - [x] T11: `nats/consumer`, `nats/producer`
 - [x] T12: `observability` root, `observability/attributes`, `observability/logs`
-- [ ] T13: `observability/metrics`, `observability/tracer`
+- [x] T13: `observability/metrics`, `observability/tracer`
 
 ### Checkpoint B: contracts complete
 - [ ] `check-doc-contracts.sh` passes on the whole tree

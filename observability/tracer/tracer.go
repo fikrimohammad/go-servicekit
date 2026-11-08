@@ -1,5 +1,3 @@
-// Package tracer installs the trace pipeline and exposes named tracers,
-// attribute conversion, trace and span ID extraction, and global setup.
 package tracer
 
 import (
