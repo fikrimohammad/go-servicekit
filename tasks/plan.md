@@ -82,7 +82,7 @@ Details, acceptance criteria, and verification are in [todo.md](todo.md).
 
 ### Phase 2: Contracts (parallel)
 - [x] T5: `errs`, `errgroup`, `identity`
-- [ ] T6: `redis`, `s3`
+- [x] T6: `redis`, `s3`
 - [ ] T7: `cron`, `cron/engine`
 - [ ] T8: `confloader`, `confloader/client`
 - [ ] T9: `confloader/client/etcd`, `confloader/client/infisical`

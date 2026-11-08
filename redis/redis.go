@@ -1,32 +1,3 @@
-// Package redis wraps github.com/redis/go-redis/v9 and records OpenTelemetry
-// traces and metrics per executed command.
-//
-// New builds a go-redis client from a Config, attaches an instrumentation
-// hook, pings the server to verify the connection, and returns a
-// [redis.UniversalClient] with the full go-redis command set. Its Close also
-// stops the pool-metrics poller and waits for it to exit. Metrics and tracing
-// clients are injectable via WithMetrics / WithTracer and fall back to the OTel
-// global providers.
-//
-// Instrumentation rides go-redis' hook pipeline, so every command, current
-// and future, is covered without per-method wrapping. Per executed command
-// one client span named after the command and one
-// db.client.operation.duration histogram sample are recorded. The metric
-// carries db.system.name ("redis"), db.namespace (the database index),
-// db.operation.name, server.address and server.port (when known). On failure
-// it also carries error.type (the Redis simple-error prefix such as "WRONGTYPE",
-// "timeout", "canceled", or "_OTHER") and db.response.status_code (the
-// simple-error prefix, when the server reports one). The span also carries
-// db.query.text (values redacted as "?"); the metric does not, to keep its
-// cardinality bounded. goredis.Nil is treated as a successful lookup and does
-// not set error telemetry.
-//
-// Pipelines are recorded as a single span "PIPELINE". For two or more queued
-// commands the span also carries db.operation.batch.size (MULTI and EXEC of a
-// transaction are not counted). The metric carries neither.
-//
-// Tracing and metrics use the OTel global providers (otel.SetTracerProvider and
-// otel.SetMeterProvider) unless overridden with [WithMetrics] or [WithTracer].
 package redis
 
 import (
