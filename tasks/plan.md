@@ -105,7 +105,7 @@ Details, acceptance criteria, and verification are in [todo.md](todo.md).
 - [x] T17: `db` sample
 - [x] T18: `confloader` sample
 - [x] T19: `rest/server` sample
-- [ ] T20: `observability` sample
+- [x] T20: `observability` sample
 - [ ] T21: `nats/consumer` sample
 
 ### Checkpoint C: kit complete
