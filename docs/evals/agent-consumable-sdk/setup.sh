@@ -30,8 +30,8 @@ cp -R "$here/fixtures/$sample/." "$work/"
 # the fixture needs all of them.
 while IFS= read -r modfile; do
   module=$(awk '$1 == "module" { print $2; exit }' "$modfile")
-  dir=${modfile%"$root"/}
-  dir=$(dirname "$dir")
+  rel=${modfile#"$root"/}
+  dir=$(dirname "$rel")
   (cd "$work" && GOWORK=off go mod edit -replace "$module=$root/$dir")
 done < <(find "$root" -maxdepth 2 -name go.mod -not -path '*/vendor/*' | sort)
 

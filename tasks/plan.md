@@ -101,7 +101,7 @@ Details, acceptance criteria, and verification are in [todo.md](todo.md).
 ### Phase 3: CI and eval kit
 - [x] T14: Wire the contract check into CI (owner approval required)
 - [x] T15: Eval-kit protocol, correction log, `setup.sh`
-- [ ] T16: `errs` sample (first complete kit)
+- [x] T16: `errs` sample (first complete kit)
 - [ ] T17: `db` sample
 - [ ] T18: `confloader` sample
 - [ ] T19: `rest/server` sample
