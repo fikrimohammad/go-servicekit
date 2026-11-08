@@ -122,7 +122,8 @@ func TestEtcdIntegrationCompaction(t *testing.T) {
 		t.Fatalf("Load: %v", err)
 	}
 
-	next := put("toggle_switch", "false")
+	put("toggle_switch", "false")
+	next := put("checkouts/max_retry", "5")
 	if _, err := cli.Compact(ctx, next); err != nil {
 		t.Fatalf("Compact(%d): %v", next, err)
 	}
@@ -139,6 +140,9 @@ func TestEtcdIntegrationCompaction(t *testing.T) {
 	ev := awaitEvent(t, events, func(ev conf.Event) bool { return ev.Reset != nil })
 	if got := ev.Reset["toggle_switch"]; got != "false" {
 		t.Errorf("reset toggle_switch = %q, want false", got)
+	}
+	if got := ev.Reset["checkouts/max_retry"]; got != "5" {
+		t.Errorf("reset checkouts/max_retry = %q, want 5", got)
 	}
 }
 

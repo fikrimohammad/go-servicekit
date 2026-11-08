@@ -14,8 +14,7 @@ This plan replaces the completed agent-consumable-sdk plan (all tasks done).
 
 **Status 2026-11-08:** T1–T22 are implemented on `feat/conf-module`. Unit,
 race, lint, gostyle, and doc-contract checks pass. The etcd integration tests
-compile and skip without `CONF_ETCD_ENDPOINT`; run them against a live etcd to
-verify watch and compaction behavior.
+pass against a local etcd 3.5.17 (root loader, watch, compaction resync).
 
 ## Architecture Decisions
 
