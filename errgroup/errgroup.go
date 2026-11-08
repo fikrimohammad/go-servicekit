@@ -1,13 +1,3 @@
-// Package errgroup provides a concurrency-limited, panic-safe wrapper around
-// golang.org/x/sync/errgroup.
-//
-// Compared to the upstream errgroup, this package:
-//   - Enforces a maxConcurrency limit via functional options.
-//   - Recovers from panics inside tasks and reports them as a *PanicError
-//     carrying the panic value and stack trace.
-//   - Skips scheduling tasks whose parent context is already canceled.
-//   - Supports child groups (SubGroup) that inherit the parent's context
-//     and default concurrency limit.
 package errgroup
 
 import (

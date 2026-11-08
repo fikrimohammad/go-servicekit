@@ -81,7 +81,7 @@ Details, acceptance criteria, and verification are in [todo.md](todo.md).
 - [x] Every module still passes vet and test
 
 ### Phase 2: Contracts (parallel)
-- [ ] T5: `errs`, `errgroup`, `identity`
+- [x] T5: `errs`, `errgroup`, `identity`
 - [ ] T6: `redis`, `s3`
 - [ ] T7: `cron`, `cron/engine`
 - [ ] T8: `confloader`, `confloader/client`

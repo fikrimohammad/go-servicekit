@@ -1,10 +1,3 @@
-// Package identity provides the standardized service identity attached to logs,
-// metrics, and traces. It is intentionally dependency-free so it can be reused
-// as part of a standalone development SDK.
-//
-// Identity is resolved from environment variables, with the OpenTelemetry
-// environment conventions honoured as fallbacks. An identity that names no
-// service is invalid; callers reject it with [Info.Validate].
 package identity
 
 import (
