@@ -4,6 +4,7 @@
 // the in-process and real-socket request helpers, the raw-socket exchange for
 // responses that Hertz doesn't frame normally, test servers, the span recorder,
 // the recording metrics client, and the log capture for the default logger.
+
 package server
 
 import (
@@ -115,6 +116,7 @@ type metricCall struct {
 // copies, so a test can read them while the server is still running.
 type recordingMetrics struct {
 	metrics.Client
+
 	mu      sync.Mutex
 	records []metricCall
 	upDowns []metricCall
@@ -305,6 +307,13 @@ func (b *logBuffer) Write(p []byte) (int, error) {
 	return n, err
 }
 
+// String returns everything written so far.
+func (b *logBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
 // waitContains returns once the buffer contains want. It fails the test if
 // that doesn't happen within testTimeout.
 func (b *logBuffer) waitContains(t *testing.T, want string) {
@@ -318,13 +327,6 @@ func (b *logBuffer) waitContains(t *testing.T, want string) {
 			t.Fatalf("log output does not contain %q within %v; log output:\n%s", want, testTimeout, b.String())
 		}
 	}
-}
-
-// String returns everything written so far.
-func (b *logBuffer) String() string {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.buf.String()
 }
 
 // captureLogs makes the default logger write JSON at debug level to the

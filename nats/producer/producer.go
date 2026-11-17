@@ -282,17 +282,6 @@ func (p *Producer) PublishSyncWithDelay(ctx context.Context, msg Message, delay 
 	return p.publishSync(ctx, msg, nm, target)
 }
 
-// publishSync sends nm, the wire form of msg, inside a producer span. target is
-// the data subject the message is delivered to, which is nm.Subject for a plain
-// publish and the schedule target for a delayed one.
-func (p *Producer) publishSync(ctx context.Context, msg Message, nm *nats.Msg, target string) error {
-	_, err := p.metaFor(msg.Topic).instrumentPublish(ctx, msg, target, nm,
-		func(ctx context.Context) (*jetstream.PubAck, error) {
-			return p.sendSync(ctx, msg.Topic, nm)
-		})
-	return err
-}
-
 // PublishAsync sends msg asynchronously; callback receives the result or error.
 // Start must have succeeded for the topic. Shutdown waits for callback to return.
 func (p *Producer) PublishAsync(ctx context.Context, msg Message,
@@ -415,6 +404,17 @@ func (p *Producer) Shutdown(ctx context.Context) error {
 		}
 	}
 	return errors.Join(errs...)
+}
+
+// publishSync sends nm, the wire form of msg, inside a producer span. target is
+// the data subject the message is delivered to, which is nm.Subject for a plain
+// publish and the schedule target for a delayed one.
+func (p *Producer) publishSync(ctx context.Context, msg Message, nm *nats.Msg, target string) error {
+	_, err := p.metaFor(msg.Topic).instrumentPublish(ctx, msg, target, nm,
+		func(ctx context.Context) (*jetstream.PubAck, error) {
+			return p.sendSync(ctx, msg.Topic, nm)
+		})
+	return err
 }
 
 // sendSync resolves the producer and performs a synchronous send.

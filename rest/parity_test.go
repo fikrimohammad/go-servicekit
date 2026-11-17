@@ -128,6 +128,7 @@ type metricCall struct {
 // for Provider and Stop, so the fixture needs no direct import of otel/metric.
 type recordingMetrics struct {
 	metrics.Client
+
 	mu    sync.Mutex
 	calls []metricCall
 }

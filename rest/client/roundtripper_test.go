@@ -56,6 +56,7 @@ func newEchoVendor(t *testing.T) *httptest.Server {
 // recordingBody is a request body that records whether it was closed.
 type recordingBody struct {
 	io.Reader
+
 	closed bool
 }
 

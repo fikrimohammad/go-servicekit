@@ -255,10 +255,11 @@ func endpointAddress(endpoint string) (string, int) {
 
 // client implements Client.
 type client struct {
+	meta
+
 	api     *s3.Client
 	tm      *transfermanager.Client
 	presign *s3.PresignClient
-	meta
 }
 
 var _ Client = (*client)(nil)

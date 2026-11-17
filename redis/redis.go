@@ -355,6 +355,7 @@ func buildTLSConfig(cfg Config) (*tls.Config, error) {
 // closes the pool.
 type client struct {
 	redis.UniversalClient
+
 	stopPoolMetrics chan struct{}
 	stopOnce        sync.Once
 	pollers         sync.WaitGroup
@@ -656,7 +657,7 @@ func redisErrorCode(err error) string {
 }
 
 func isUpperASCII(s string) bool {
-	if len(s) == 0 {
+	if s == "" {
 		return false
 	}
 	for i := 0; i < len(s); i++ {
