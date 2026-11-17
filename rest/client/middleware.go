@@ -530,7 +530,7 @@ func attemptOutcome(resp *protocol.Response, err error) outcome {
 	status := resp.StatusCode()
 	return outcome{
 		status:  status,
-		version: semconv.ProtocolVersion(string(resp.Header.GetProtocol())),
+		version: semconv.ProtocolVersion(resp.Header.GetProtocol()),
 		errType: semconv.ClientErrorType(status, nil),
 	}
 }

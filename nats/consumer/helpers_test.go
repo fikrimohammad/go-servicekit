@@ -1,6 +1,7 @@
 // This file holds the shared test helpers for package consumer: an in-process
 // JetStream server, real pull-consumer fixtures, a recording logger, and metric
 // collection.
+
 package consumer
 
 import (
@@ -249,6 +250,7 @@ func serverAttrs(t *testing.T, ns *natsserver.Server) (string, int) {
 // methods the adapter calls on the skip path are defined.
 type unmetaMsg struct {
 	jetstream.Msg
+
 	metaErr error
 	nacked  atomic.Bool
 }
@@ -320,12 +322,6 @@ type recordingLogger struct {
 	recs []recordedLog
 }
 
-func (r *recordingLogger) add(level, msg string, args []any) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.recs = append(r.recs, recordedLog{level: level, msg: msg, args: args})
-}
-
 func (r *recordingLogger) Debug(_ context.Context, msg string, args ...any) {
 	r.add("DEBUG", msg, args)
 }
@@ -340,6 +336,12 @@ func (r *recordingLogger) Warn(_ context.Context, msg string, args ...any) {
 
 func (r *recordingLogger) Error(_ context.Context, msg string, args ...any) {
 	r.add("ERROR", msg, args)
+}
+
+func (r *recordingLogger) add(level, msg string, args []any) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.recs = append(r.recs, recordedLog{level: level, msg: msg, args: args})
 }
 
 // find returns the first record with the given level and message.

@@ -160,6 +160,57 @@ func (e *Engine) Trigger(ctx context.Context, jobName string) error {
 	return e.runJob(ctx, job, "manual")
 }
 
+// Start begins scheduling and executing jobs.
+func (e *Engine) Start() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	if e.stopping || e.running {
+		return
+	}
+	e.running = true
+	e.cron.Start()
+}
+
+// Stop initiates a two-phase graceful shutdown: waits for active jobs up to ctx deadline;
+// cancels in-flight job contexts if the deadline expires.
+// ctx is required. If it has no deadline, Config.ShutdownTimeout is applied.
+func (e *Engine) Stop(ctx context.Context) error {
+	e.mu.Lock()
+	if e.stopping {
+		e.mu.Unlock()
+		return nil // already stopping or stopped
+	}
+	e.stopping = true
+	e.running = false
+	cronDone := e.cron.Stop().Done()
+	e.mu.Unlock()
+
+	// Ensure context has a timeout to prevent hanging.
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, e.cfg.ShutdownTimeout)
+		defer cancel()
+	}
+
+	done := make(chan struct{})
+	go func() {
+		<-cronDone
+		e.activeWg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		e.stopCancel()
+		return nil
+	case <-ctx.Done():
+		// Canceling stopCtx cancels every active run through its stop watcher.
+		e.stopCancel()
+		return ctx.Err()
+	}
+}
+
 func (e *Engine) runJob(parentCtx context.Context, job cron.Job, trigger string) (err error) {
 	// Outermost guard: a panic from a Toggler, Locker, or Unlock would otherwise
 	// crash the process on a scheduled run. Handler panics are recovered inside
@@ -216,55 +267,4 @@ func (e *Engine) runJob(parentCtx context.Context, job cron.Job, trigger string)
 	}
 
 	return m.buildChain(job.Handler)(ctx)
-}
-
-// Start begins scheduling and executing jobs.
-func (e *Engine) Start() {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
-	if e.stopping || e.running {
-		return
-	}
-	e.running = true
-	e.cron.Start()
-}
-
-// Stop initiates a two-phase graceful shutdown: waits for active jobs up to ctx deadline;
-// cancels in-flight job contexts if the deadline expires.
-// ctx is required. If it has no deadline, Config.ShutdownTimeout is applied.
-func (e *Engine) Stop(ctx context.Context) error {
-	e.mu.Lock()
-	if e.stopping {
-		e.mu.Unlock()
-		return nil // already stopping or stopped
-	}
-	e.stopping = true
-	e.running = false
-	cronDone := e.cron.Stop().Done()
-	e.mu.Unlock()
-
-	// Ensure context has a timeout to prevent hanging.
-	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, e.cfg.ShutdownTimeout)
-		defer cancel()
-	}
-
-	done := make(chan struct{})
-	go func() {
-		<-cronDone
-		e.activeWg.Wait()
-		close(done)
-	}()
-
-	select {
-	case <-done:
-		e.stopCancel()
-		return nil
-	case <-ctx.Done():
-		// Canceling stopCtx cancels every active run through its stop watcher.
-		e.stopCancel()
-		return ctx.Err()
-	}
 }

@@ -292,24 +292,6 @@ func (c *Consumer) Start(ctx context.Context) error {
 	return nil
 }
 
-// startOne creates the durable consumer for reg and starts its delivery. Handler
-// calls derive from runCtx. On a failure after creation it shuts that consumer
-// down.
-func (c *Consumer) startOne(ctx, runCtx context.Context, name string, reg registration) (*streamConsumer, error) {
-	cn, err := dialConsumer(ctx, reg.cfg, name)
-	if err != nil {
-		return nil, fmt.Errorf("consumer: create %s: %w", name, err)
-	}
-
-	handle := func(msg jetstream.Msg) {
-		_ = reg.handler.HandleMsg(runCtx, msg)
-	}
-	if err := cn.consume(handle); err != nil {
-		return nil, errors.Join(fmt.Errorf("consumer: subscribe %s: %w", name, err), cn.shutdown(ctx))
-	}
-	return cn, nil
-}
-
 // Shutdown cancels the context of in-flight handlers, stops intake for every
 // started consumer, waits for the handlers, and drains the connections, all
 // bounded by ctx. It returns ctx.Err() when ctx ends first. Shutdown does nothing
@@ -330,6 +312,24 @@ func (c *Consumer) Shutdown(ctx context.Context) error {
 	c.cancelRun = nil
 	c.started = false
 	return shutdownAll(ctx, running)
+}
+
+// startOne creates the durable consumer for reg and starts its delivery. Handler
+// calls derive from runCtx. On a failure after creation it shuts that consumer
+// down.
+func (c *Consumer) startOne(ctx, runCtx context.Context, name string, reg registration) (*streamConsumer, error) {
+	cn, err := dialConsumer(ctx, reg.cfg, name)
+	if err != nil {
+		return nil, fmt.Errorf("consumer: create %s: %w", name, err)
+	}
+
+	handle := func(msg jetstream.Msg) {
+		_ = reg.handler.HandleMsg(runCtx, msg)
+	}
+	if err := cn.consume(handle); err != nil {
+		return nil, errors.Join(fmt.Errorf("consumer: subscribe %s: %w", name, err), cn.shutdown(ctx))
+	}
+	return cn, nil
 }
 
 // shutdownAll shuts down every consumer in cns and joins their errors.

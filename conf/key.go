@@ -88,7 +88,11 @@ func walk(t reflect.Type, path []string, index []int, ownsFormat bool, leaves *[
 				}
 			}
 
-			targetType := reflect.New(fieldType).Elem().Addr().Interface().(getterLeaf).target()
+			gl, ok := reflect.TypeAssert[getterLeaf](reflect.New(fieldType).Elem().Addr())
+			if !ok {
+				return fmt.Errorf("%w: field %s cannot be inspected", ErrInvalidType, field.Name)
+			}
+			targetType := gl.target()
 			*leaves = append(*leaves, leaf{
 				key:    key,
 				typ:    targetType,

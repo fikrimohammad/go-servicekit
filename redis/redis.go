@@ -355,6 +355,7 @@ func buildTLSConfig(cfg Config) (*tls.Config, error) {
 // closes the pool.
 type client struct {
 	redis.UniversalClient
+
 	stopPoolMetrics chan struct{}
 	stopOnce        sync.Once
 	pollers         sync.WaitGroup
@@ -580,7 +581,7 @@ func (m meta) attrs(op, code, errType string) map[string]any {
 		a[string(otelsemconv.DBResponseStatusCodeKey)] = code
 	}
 	if errType != "" {
-		// gostyle:ignore error-type-message errType is redisErrorCode's uppercase Redis prefix or a fixed class, never the message
+		// otelcheck:ignore error-type-message errType is redisErrorCode's uppercase Redis prefix or a fixed class, never the message
 		a[string(otelsemconv.ErrorTypeKey)] = errType
 	}
 	return a
@@ -656,7 +657,7 @@ func redisErrorCode(err error) string {
 }
 
 func isUpperASCII(s string) bool {
-	if len(s) == 0 {
+	if s == "" {
 		return false
 	}
 	for i := 0; i < len(s); i++ {

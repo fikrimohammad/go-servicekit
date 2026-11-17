@@ -45,13 +45,6 @@ func (h *streamHandler) Handle(ctx context.Context, r slog.Record) error {
 	return h.handler(r.Level).Handle(ctx, r)
 }
 
-func (h *streamHandler) handler(level slog.Level) slog.Handler {
-	if level >= slog.LevelWarn {
-		return h.stderr
-	}
-	return h.stdout
-}
-
 func (h *streamHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	return &streamHandler{
 		stdout: h.stdout.WithAttrs(attrs),
@@ -64,6 +57,13 @@ func (h *streamHandler) WithGroup(name string) slog.Handler {
 		stdout: h.stdout.WithGroup(name),
 		stderr: h.stderr.WithGroup(name),
 	}
+}
+
+func (h *streamHandler) handler(level slog.Level) slog.Handler {
+	if level >= slog.LevelWarn {
+		return h.stderr
+	}
+	return h.stdout
 }
 
 // traceHandler adds trace_id and span_id attributes from the record's context.

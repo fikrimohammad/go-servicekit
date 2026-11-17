@@ -563,12 +563,6 @@ type recordingLogger struct {
 	recs []recordedLog
 }
 
-func (r *recordingLogger) add(level, msg string, args []any) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.recs = append(r.recs, recordedLog{level: level, msg: msg, args: args})
-}
-
 func (r *recordingLogger) Debug(_ context.Context, msg string, args ...any) {
 	r.add("DEBUG", msg, args)
 }
@@ -583,6 +577,12 @@ func (r *recordingLogger) Warn(_ context.Context, msg string, args ...any) {
 
 func (r *recordingLogger) Error(_ context.Context, msg string, args ...any) {
 	r.add("ERROR", msg, args)
+}
+
+func (r *recordingLogger) add(level, msg string, args []any) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.recs = append(r.recs, recordedLog{level: level, msg: msg, args: args})
 }
 
 // find returns the first record with the given level and message.

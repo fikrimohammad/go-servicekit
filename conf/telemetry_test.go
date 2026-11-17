@@ -29,14 +29,6 @@ type recordMetrics struct {
 	calls []metricCall
 }
 
-func (r *recordMetrics) add(kind string, instrument metrics.Instrument, value float64, attrs map[string]any) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	copied := make(map[string]any, len(attrs))
-	maps.Copy(copied, attrs)
-	r.calls = append(r.calls, metricCall{kind: kind, instrument: instrument, value: value, attrs: copied})
-}
-
 func (r *recordMetrics) Add(_ context.Context, instrument metrics.Instrument, value int64, attrs map[string]any) error {
 	r.add("counter", instrument, float64(value), attrs)
 	return nil
@@ -59,6 +51,14 @@ func (r *recordMetrics) RecordGauge(_ context.Context, instrument metrics.Instru
 
 func (r *recordMetrics) Provider() metric.MeterProvider { return nil }
 func (r *recordMetrics) Stop(context.Context) error     { return nil }
+
+func (r *recordMetrics) add(kind string, instrument metrics.Instrument, value float64, attrs map[string]any) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	copied := make(map[string]any, len(attrs))
+	maps.Copy(copied, attrs)
+	r.calls = append(r.calls, metricCall{kind: kind, instrument: instrument, value: value, attrs: copied})
+}
 
 func (r *recordMetrics) find(name string) []metricCall {
 	r.mu.Lock()
@@ -83,12 +83,6 @@ type recordLogger struct {
 	calls []logCall
 }
 
-func (l *recordLogger) add(level, msg string, args ...any) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	l.calls = append(l.calls, logCall{level: level, msg: msg, args: append([]any(nil), args...)})
-}
-
 func (l *recordLogger) Debug(_ context.Context, msg string, args ...any) {
 	l.add("debug", msg, args...)
 }
@@ -96,6 +90,12 @@ func (l *recordLogger) Info(_ context.Context, msg string, args ...any) { l.add(
 func (l *recordLogger) Warn(_ context.Context, msg string, args ...any) { l.add("warn", msg, args...) }
 func (l *recordLogger) Error(_ context.Context, msg string, args ...any) {
 	l.add("error", msg, args...)
+}
+
+func (l *recordLogger) add(level, msg string, args ...any) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.calls = append(l.calls, logCall{level: level, msg: msg, args: append([]any(nil), args...)})
 }
 
 func (l *recordLogger) find(level, msg string) []logCall {

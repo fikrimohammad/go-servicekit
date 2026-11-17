@@ -64,22 +64,6 @@ func New(cfg Config, opts ...Option) (*Server, error) {
 	return s, nil
 }
 
-// registerMiddleware installs the standard stack, in the order the package doc
-// gives, and the problem+json handlers for unmatched routes and methods. Hertz
-// runs global middleware around the NoRoute and NoMethod handlers too, so the
-// stack sees 404 and 405 responses.
-func (s *Server) registerMiddleware() {
-	s.hz.Use(
-		requestID(),
-		tracing(s.tc),
-		measure(s.mc),
-		logging(),
-		recovery(),
-	)
-	s.hz.NoRoute(noRoute())
-	s.hz.NoMethod(noMethod())
-}
-
 // requestIDKey is the context key under which requestID stores the request
 // ID.
 type requestIDKey struct{}
@@ -169,6 +153,22 @@ func (s *Server) Run(ctx context.Context) error {
 		return fmt.Errorf("rest/server: shutdown: %w", err)
 	}
 	return runError(runErr)
+}
+
+// registerMiddleware installs the standard stack, in the order the package doc
+// gives, and the problem+json handlers for unmatched routes and methods. Hertz
+// runs global middleware around the NoRoute and NoMethod handlers too, so the
+// stack sees 404 and 405 responses.
+func (s *Server) registerMiddleware() {
+	s.hz.Use(
+		requestID(),
+		tracing(s.tc),
+		measure(s.mc),
+		logging(),
+		recovery(),
+	)
+	s.hz.NoRoute(noRoute())
+	s.hz.NoMethod(noMethod())
 }
 
 // serve runs hz.Run on the calling goroutine and turns a panic into an error.

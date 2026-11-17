@@ -103,7 +103,8 @@ func (g *Group) Context() context.Context {
 // This is useful for scoping a batch of related tasks whose failures should
 // not tear down the parent group.
 func (g *Group) SubGroup(opts ...Option) *Group {
-	subGroupOptions := []Option{WithMaxConcurrency(g.maxConcurrency)}
+	subGroupOptions := make([]Option, 0, 1+len(opts))
+	subGroupOptions = append(subGroupOptions, WithMaxConcurrency(g.maxConcurrency))
 	subGroupOptions = append(subGroupOptions, opts...)
 	return New(g.ctx, subGroupOptions...)
 }

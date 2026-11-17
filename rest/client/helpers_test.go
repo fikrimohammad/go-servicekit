@@ -10,6 +10,7 @@
 // vendors that must send bytes no net/http server can send, such as a 1xx
 // response before the final one, are raw TCP servers. The file also holds the
 // request paths that must reach a vendor exactly as sent.
+
 package client
 
 import (
@@ -373,6 +374,7 @@ type metricCall struct {
 // the client is still in use.
 type recordingMetrics struct {
 	metrics.Client
+
 	mu      sync.Mutex
 	records []metricCall
 }

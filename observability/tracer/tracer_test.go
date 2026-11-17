@@ -186,6 +186,7 @@ func TestNew_Validation(t *testing.T) {
 // value, so comparing it with == panics.
 type valueTP struct {
 	noop.TracerProvider
+
 	tags []string
 }
 

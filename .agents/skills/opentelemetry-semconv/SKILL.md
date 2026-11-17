@@ -68,12 +68,12 @@ Some existing instrumentation predates these rules, including generic fixed span
 
 ## Machine-checked rules
 
-`scripts/gostyle.go` in `go-best-practices` enforces two of the rules above, and CI fails on a finding:
+`.github/scripts/otelcheck/otelcheck.go` enforces two of the rules above, and CI fails on a finding:
 
 - `error-type-message`: `error.type` is built from an error's text. A finding means the value is unbounded. Use a registered class (a code, `timeout`, `canceled`, or `_OTHER`), and keep the message on the span or in logs.
-- `metric-high-cardinality`: a per-event key (`db.query.text`, `messaging.message.id`, `exception.message`, `url.full`, `user.id`, and others listed in gostyle) reaches a metric's attributes. A finding means the metric would create a series per event. Move the value to the span.
+- `metric-high-cardinality`: a per-event key (`db.query.text`, `messaging.message.id`, `exception.message`, `url.full`, `user.id`, and others listed in `otelcheck.go`) reaches a metric's attributes. A finding means the metric would create a series per event. Move the value to the span.
 
-A deliberate case that the rule cannot tell apart from a bug needs `// gostyle:ignore <rule> <reason>` on the same line or the line above. The reason must say why the value is bounded.
+A deliberate case that the rule cannot tell apart from a bug needs `// otelcheck:ignore <rule> <reason>` on the same line or the line above. The reason must say why the value is bounded.
 
 ## Verification
 

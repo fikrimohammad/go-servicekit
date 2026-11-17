@@ -190,8 +190,9 @@ var (
 // dbConn implements DB against a *sqlx.DB.
 type dbConn struct {
 	*sqlx.DB
-	driver driverSpec
 	meta
+
+	driver driverSpec
 }
 
 // NamedSelectContext binds the named placeholders in query with arg, then runs
@@ -237,9 +238,10 @@ func (d *dbConn) Close() error { return d.DB.Close() }
 
 // dbTx implements Tx against a *sqlx.Tx.
 type dbTx struct {
+	meta
+
 	tx     *sqlx.Tx
 	driver driverSpec
-	meta
 }
 
 // NamedSelectContext runs a SELECT inside the transaction, storing the result

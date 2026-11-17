@@ -624,6 +624,7 @@ func TestDefault_FollowsOTelGlobal(t *testing.T) {
 // value, so comparing it with == panics.
 type valueMP struct {
 	noop.MeterProvider
+
 	tags []string
 }
 

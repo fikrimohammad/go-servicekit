@@ -48,7 +48,7 @@ const tracerScope = "rest.server"
 // a set that can't break a log line or a header. nginx's $request_id (32 hex
 // characters) matches.
 func validRequestID(id string) bool {
-	if len(id) == 0 || len(id) > 64 {
+	if id == "" || len(id) > 64 {
 		return false
 	}
 	for i := range len(id) {
