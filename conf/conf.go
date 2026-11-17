@@ -94,6 +94,7 @@ type snapshot struct {
 // Loader binds one Provider to a struct of Getter fields.
 type Loader[T any] struct {
 	*loaderCore
+
 	data T
 }
 
@@ -243,7 +244,12 @@ func New[T any](ctx context.Context, p Provider, opts ...Option) (loader *Loader
 		binder.bind(func() (any, error) { return core.get(key) })
 	}
 
-	loader = &Loader[T]{loaderCore: core, data: dataVal.Interface().(T)}
+	data, ok := reflect.TypeAssert[T](dataVal)
+	if !ok {
+		_ = p.Close()
+		return nil, fmt.Errorf("%w: unexpected config struct type %s", ErrInvalidType, dataVal.Type())
+	}
+	loader = &Loader[T]{loaderCore: core, data: data}
 
 	if w, ok := p.(Watcher); ok {
 		watchCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
@@ -264,6 +270,32 @@ func New[T any](ctx context.Context, p Provider, opts ...Option) (loader *Loader
 
 // Data returns the config struct with every Getter bound.
 func (l *Loader[T]) Data() T { return l.data }
+
+// State reports the loader's health and lifecycle state.
+func (c *loaderCore) State() State {
+	c.stateMu.Lock()
+	defer c.stateMu.Unlock()
+	return c.state
+}
+
+// Close stops the watch and closes the provider. It is idempotent.
+func (c *loaderCore) Close() error {
+	c.closeOnce.Do(func() {
+		c.closed.Store(true)
+		c.setState(StateClosed)
+		if c.cancel != nil {
+			c.cancel()
+		}
+		if c.done != nil {
+			<-c.done
+		}
+		c.closeErr = c.provider.Close()
+		if c.closeErr != nil {
+			c.loggerClient().Error(c.logCtx, "conf: close failed", "error.type", "_OTHER")
+		}
+	})
+	return c.closeErr
+}
 
 func (c *loaderCore) parse(raw string, l leaf) (any, error) {
 	if c.formatter != nil {
@@ -287,34 +319,8 @@ func (c *loaderCore) get(key string) (any, error) {
 	return v, nil
 }
 
-// State reports the loader's health and lifecycle state.
-func (c *loaderCore) State() State {
-	c.stateMu.Lock()
-	defer c.stateMu.Unlock()
-	return c.state
-}
-
 func (c *loaderCore) setState(s State) {
 	c.stateMu.Lock()
 	c.state = s
 	c.stateMu.Unlock()
-}
-
-// Close stops the watch and closes the provider. It is idempotent.
-func (c *loaderCore) Close() error {
-	c.closeOnce.Do(func() {
-		c.closed.Store(true)
-		c.setState(StateClosed)
-		if c.cancel != nil {
-			c.cancel()
-		}
-		if c.done != nil {
-			<-c.done
-		}
-		c.closeErr = c.provider.Close()
-		if c.closeErr != nil {
-			c.loggerClient().Error(c.logCtx, "conf: close failed", "error.type", "_OTHER")
-		}
-	})
-	return c.closeErr
 }
