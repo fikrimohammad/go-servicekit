@@ -55,14 +55,20 @@ func (e *Error) Error() string {
 
 // Unwrap returns the underlying cause, enabling errors.Is/As chain traversal.
 func (e *Error) Unwrap() error {
+	if e == nil {
+		return nil
+	}
 	return e.cause
 }
 
 // Is reports whether target is an *Error with the same non-zero code.
 // Errors with code 0 (unknown) never match by code.
 func (e *Error) Is(target error) bool {
+	if e == nil {
+		return false
+	}
 	t, ok := target.(*Error)
-	return ok && e.code != 0 && e.code == t.code
+	return ok && t != nil && e.code != 0 && e.code == t.code
 }
 
 // WithMeta returns a new Error with the given key-value metadata pair added.

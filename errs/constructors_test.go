@@ -2,6 +2,7 @@ package errs
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 )
 
@@ -67,5 +68,48 @@ func TestAsError_PlainError(t *testing.T) {
 	}
 	if got.Cause() != plain {
 		t.Errorf("AsError(%v).Cause() = %v, want %v", plain, got.Cause(), plain)
+	}
+}
+
+func TestAsError_TypedNil(t *testing.T) {
+	var nilErr *Error
+	got := AsError(nilErr)
+	if got == nil {
+		t.Fatal("AsError(typed nil) = nil, want code-0 error")
+	}
+	if got.Code() != 0 {
+		t.Errorf("Code() = %v, want 0", got.Code())
+	}
+	if got.Message() != "nil *errs.Error" {
+		t.Errorf("Message() = %q, want %q", got.Message(), "nil *errs.Error")
+	}
+	if got.Cause() != nil {
+		t.Errorf("Cause() = %v, want nil", got.Cause())
+	}
+	_ = got.LogValue()
+}
+
+func TestAsError_WrappedTypedNil(t *testing.T) {
+	var nilErr *Error
+	wrapped := fmt.Errorf("load: %w", nilErr)
+	got := AsError(wrapped)
+	if got == nil {
+		t.Fatal("AsError(wrapped typed nil) = nil, want code-0 error")
+	}
+	if got.Code() != 0 {
+		t.Errorf("Code() = %v, want 0", got.Code())
+	}
+	if got.Cause() != wrapped {
+		t.Errorf("Cause() = %v, want %v", got.Cause(), wrapped)
+	}
+	_ = got.LogValue()
+}
+
+func TestAsError_JoinSkipsTypedNil(t *testing.T) {
+	var nilErr *Error
+	realErr := New(4004, "real")
+	got := AsError(errors.Join(nilErr, realErr))
+	if got != realErr {
+		t.Errorf("AsError(join) = %v, want %v", got, realErr)
 	}
 }

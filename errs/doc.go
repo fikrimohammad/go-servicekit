@@ -23,8 +23,8 @@
 //
 // An *Error is created by [New], [Wrap], or [AsError]. [Error.WithMeta] and
 // [Error.WithDebug] return a modified copy, so the original is safe to share.
-// AsError returns the *Error found in a chain, or wraps a plain error with code
-// 0.
+// AsError returns the non-nil *Error found in a chain, or wraps a plain error
+// with code 0. A typed-nil *Error is ignored.
 //
 // # Common mistakes
 //

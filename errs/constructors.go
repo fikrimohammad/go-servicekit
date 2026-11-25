@@ -2,6 +2,7 @@ package errs
 
 import (
 	"errors"
+	"fmt"
 	"runtime"
 )
 
@@ -29,21 +30,58 @@ func Wrap(code int, message string, cause error) *Error {
 }
 
 // AsError extracts an *Error from an error chain.
-// If err is nil, returns nil. If err wraps an *Error, returns that *Error.
-// If err is a plain error, wraps it with code 0 (unknown).
+// If err is nil, returns nil. If err wraps a non-nil *Error, returns that
+// *Error. A typed-nil *Error is ignored. If err is a plain error, wraps it
+// with code 0 (unknown).
 func AsError(err error) *Error {
 	if err == nil {
 		return nil
 	}
-	if e, ok := errors.AsType[*Error](err); ok {
+	if e := firstError(err); e != nil {
 		return e
+	}
+	message := fmt.Sprint(err)
+	cause := err
+	if e, ok := err.(*Error); ok && e == nil {
+		message = "nil *errs.Error"
+		cause = nil
 	}
 	return &Error{
 		code:    0,
-		message: err.Error(),
-		cause:   err,
+		message: message,
+		cause:   cause,
 		stack:   captureStack(1),
 	}
+}
+
+// firstError returns the first non-nil *Error in err's chain.
+func firstError(err error) *Error {
+	if err == nil {
+		return nil
+	}
+	if e, ok := err.(*Error); ok && e == nil {
+		return nil
+	}
+	e, ok := errors.AsType[*Error](err)
+	if !ok {
+		return nil
+	}
+	if e != nil {
+		return e
+	}
+	// A typed-nil *Error matched. Walk past it to find a non-nil one, which
+	// errors.AsType can hide in an errors.Join.
+	switch x := err.(type) {
+	case interface{ Unwrap() []error }:
+		for _, child := range x.Unwrap() {
+			if e := firstError(child); e != nil {
+				return e
+			}
+		}
+	case interface{ Unwrap() error }:
+		return firstError(x.Unwrap())
+	}
+	return nil
 }
 
 func captureStack(skip int) []uintptr {
