@@ -330,13 +330,8 @@ func boundErrorAttr(c *app.RequestContext) (slog.Attr, bool) {
 	return slog.Attr{Key: "errors", Value: slog.GroupValue(group...)}, true
 }
 
-// boundErrorValue returns the log value of one bound error. errs.SlogAttr
-// dereferences a nil *errs.Error, which would panic, so a nil one in the chain
-// is logged as text instead.
+// boundErrorValue returns the log value of one bound error.
 func boundErrorValue(err error) slog.Value {
-	if e, ok := errors.AsType[*errs.Error](err); ok && e == nil {
-		return slog.StringValue("nil *errs.Error")
-	}
 	return errs.SlogAttr(err).Value
 }
 
