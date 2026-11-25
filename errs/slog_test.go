@@ -242,3 +242,67 @@ func TestSlogAttr(t *testing.T) {
 		t.Errorf("SlogAttr(%v) code = %d, want %d", err, code.Int64(), 42)
 	}
 }
+
+func TestSlogAttr_TypedNil(t *testing.T) {
+	var nilErr *Error
+	tests := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{name: "direct", err: nilErr, want: "nil *errs.Error"},
+		{name: "wrapped", err: fmt.Errorf("load: %w", nilErr), want: "load: <nil>"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			attr := SlogAttr(tt.err)
+			if attr.Value.Kind() != slog.KindString {
+				t.Fatalf("SlogAttr(%v).Kind() = %v, want %v", tt.err, attr.Value.Kind(), slog.KindString)
+			}
+			if got := attr.Value.String(); got != tt.want {
+				t.Errorf("SlogAttr(%v) = %q, want %q", tt.err, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSlogAttr_JoinSkipsTypedNil(t *testing.T) {
+	var nilErr *Error
+	realErr := New(4004, "real")
+
+	attr := SlogAttr(errors.Join(nilErr, realErr))
+	if attr.Value.Kind() != slog.KindGroup {
+		t.Fatalf("SlogAttr(join).Kind() = %v, want %v", attr.Value.Kind(), slog.KindGroup)
+	}
+	code := slogGroupToMap(attr.Value.Group())["code"]
+	if code.Int64() != 4004 {
+		t.Errorf("SlogAttr(join) code = %d, want 4004", code.Int64())
+	}
+}
+
+func TestLogValue_NilReceiver(t *testing.T) {
+	var nilErr *Error
+	val := nilErr.LogValue()
+	if val.Kind() != slog.KindGroup {
+		t.Fatalf("LogValue().Kind() = %v, want %v", val.Kind(), slog.KindGroup)
+	}
+	m := slogGroupToMap(val.Group())
+	if got := m["message"].String(); got != "nil *errs.Error" {
+		t.Errorf("message = %q, want %q", got, "nil *errs.Error")
+	}
+}
+
+func TestLogValue_TypedNilCause(t *testing.T) {
+	err := Wrap(5001, "outer", (*Error)(nil))
+	val := err.LogValue()
+	if val.Kind() != slog.KindGroup {
+		t.Fatalf("LogValue().Kind() = %v, want %v", val.Kind(), slog.KindGroup)
+	}
+	cause := slogGroupToMap(val.Group())["cause"]
+	if cause.Kind() != slog.KindString {
+		t.Fatalf("cause.Kind() = %v, want %v", cause.Kind(), slog.KindString)
+	}
+	if got := cause.String(); got != "nil *errs.Error" {
+		t.Errorf("cause = %q, want %q", got, "nil *errs.Error")
+	}
+}

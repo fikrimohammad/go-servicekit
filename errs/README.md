@@ -22,7 +22,7 @@ eagerly captured **stack trace**.
 ## Installation
 
 ```bash
-go get github.com/fikrimohammad/go-servicekit/errs@v0.1.0
+go get github.com/fikrimohammad/go-servicekit/errs@v0.3.0
 ```
 
 ## Step-by-step
@@ -115,3 +115,5 @@ logs.Error(ctx, "job failed", errs.SlogAttr(err))
 - Stack traces are captured eagerly at construction (depth capped at 32).
 - `AsError` wraps plain (non-`*Error`) errors with code `0` (unknown); the
   application decides how to interpret and map that code.
+- A typed-nil `*Error` in a chain is ignored by `AsError` and logged as text by
+  `SlogAttr`.

@@ -166,6 +166,12 @@ func TestError_Is(t *testing.T) {
 			target:   New(5001, "not found"),
 			matching: false,
 		},
+		{
+			name:     "typed nil target does not match",
+			err:      New(4004, "not found"),
+			target:   (*Error)(nil),
+			matching: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -288,6 +294,22 @@ func TestErrorsIs_CodeMatching(t *testing.T) {
 	}
 	if !errors.Is(AsError(io.EOF), io.EOF) {
 		t.Error("errors.Is(AsError(io.EOF), io.EOF) = false, want true")
+	}
+}
+
+func TestErrorsIs_TypedNilTarget(t *testing.T) {
+	err := New(4004, "not found")
+	var target *Error
+	if errors.Is(err, target) {
+		t.Error("errors.Is(err, typed nil target) = true, want false")
+	}
+}
+
+func TestErrorsIs_TypedNilReceiver(t *testing.T) {
+	var err *Error
+	target := New(4004, "not found")
+	if errors.Is(err, target) {
+		t.Error("errors.Is(typed nil receiver, target) = true, want false")
 	}
 }
 
