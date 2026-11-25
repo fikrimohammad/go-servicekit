@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/fikrimohammad/go-servicekit/conf"
-	"github.com/fikrimohammad/go-servicekit/conf/providers/etcd"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
@@ -37,7 +36,7 @@ func TestEtcdIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("clientv3.New: %v", err)
 	}
-	defer cli.Close()
+	defer func() { _ = cli.Close() }()
 
 	ns := fmt.Sprintf("conf-loader-test-%d", time.Now().UnixNano())
 	defer func() {
@@ -55,7 +54,7 @@ func TestEtcdIntegration(t *testing.T) {
 	put("checkouts/max_retry", "3")
 	put("toggle_switch", "true")
 
-	loader, err := conf.New[hot](ctx, etcd.New(etcd.Config{Endpoint: endpoint, Namespace: ns}))
+	loader, err := conf.New[hot](ctx, conf.Etcd(conf.EtcdConfig{Endpoint: endpoint, Namespace: ns}))
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

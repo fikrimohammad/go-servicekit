@@ -69,8 +69,9 @@ func errorClass(err error) string {
 		errors.Is(err, ErrMissingFormat):
 		return "config"
 	case errors.Is(err, ErrMissingKey),
-		errors.Is(err, ErrUnknownKey),
-		errors.Is(err, ErrParse):
+		errors.Is(err, ErrUnknownKey):
+		return "key"
+	case errors.Is(err, ErrParse):
 		return "parse"
 	case errors.Is(err, ErrConnect):
 		return "connect"

@@ -1,4 +1,4 @@
-package conf
+package core
 
 import (
 	"errors"
@@ -213,15 +213,15 @@ func TestParseValue(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := parseValue(tt.raw, tt.typ, tt.format)
+			got, err := ParseValue(tt.raw, tt.typ, tt.format)
 			if !errors.Is(err, tt.wantErr) {
-				t.Fatalf("parseValue(%q, %s, %s) error = %v, want %v", tt.raw, tt.typ, tt.format, err, tt.wantErr)
+				t.Fatalf("ParseValue(%q, %s, %s) error = %v, want %v", tt.raw, tt.typ, tt.format, err, tt.wantErr)
 			}
 			if tt.wantErr != nil {
 				return
 			}
 			if !equalValue(got, tt.want) {
-				t.Errorf("parseValue(%q, %s, %s) = %#v, want %#v", tt.raw, tt.typ, tt.format, got, tt.want)
+				t.Errorf("ParseValue(%q, %s, %s) = %#v, want %#v", tt.raw, tt.typ, tt.format, got, tt.want)
 			}
 		})
 	}
@@ -236,17 +236,17 @@ func equalValue(a, b any) bool {
 }
 
 func TestParseValueCustomUnmarshalers(t *testing.T) {
-	got, err := parseValue(`{"a":1}`, reflect.TypeFor[jsonDoc](), FormatJSON)
+	got, err := ParseValue(`{"a":1}`, reflect.TypeFor[jsonDoc](), FormatJSON)
 	if err != nil {
-		t.Fatalf("parseValue JSON: %v", err)
+		t.Fatalf("ParseValue JSON: %v", err)
 	}
 	if want := "json:{\"a\":1}"; got.(jsonDoc).V != want {
 		t.Errorf("JSON unmarshaler = %q, want %q", got.(jsonDoc).V, want)
 	}
 
-	got, err = parseValue("hello", reflect.TypeFor[yamlDoc](), FormatYAML)
+	got, err = ParseValue("hello", reflect.TypeFor[yamlDoc](), FormatYAML)
 	if err != nil {
-		t.Fatalf("parseValue YAML: %v", err)
+		t.Fatalf("ParseValue YAML: %v", err)
 	}
 	if want := "yaml:hello"; got.(yamlDoc).V != want {
 		t.Errorf("YAML unmarshaler = %q, want %q", got.(yamlDoc).V, want)
@@ -258,9 +258,9 @@ func TestParseValueTOMLDate(t *testing.T) {
 		D toml.LocalDate `toml:"d"`
 	}
 
-	got, err := parseValue("d = 2026-11-08\n", reflect.TypeFor[doc](), FormatTOML)
+	got, err := ParseValue("d = 2026-11-08\n", reflect.TypeFor[doc](), FormatTOML)
 	if err != nil {
-		t.Fatalf("parseValue TOML date: %v", err)
+		t.Fatalf("ParseValue TOML date: %v", err)
 	}
 	if want := "2026-11-08"; got.(doc).D.String() != want {
 		t.Errorf("TOML local date = %q, want %q", got.(doc).D.String(), want)
@@ -270,11 +270,11 @@ func TestParseValueTOMLDate(t *testing.T) {
 func TestParseValueErrorHidesRawValue(t *testing.T) {
 	const secret = "supersecret-value"
 
-	_, err := parseValue(secret, reflect.TypeFor[int](), FormatYAML)
+	_, err := ParseValue(secret, reflect.TypeFor[int](), FormatYAML)
 	if !errors.Is(err, ErrParse) {
-		t.Fatalf("parseValue() error = %v, want ErrParse", err)
+		t.Fatalf("ParseValue() error = %v, want ErrParse", err)
 	}
 	if strings.Contains(err.Error(), secret) {
-		t.Errorf("parseValue() error %q contains the raw value", err)
+		t.Errorf("ParseValue() error %q contains the raw value", err)
 	}
 }

@@ -16,9 +16,7 @@ The SDK is 11 Go modules. These are the public import paths, by task:
 | A logger with trace context | `github.com/fikrimohammad/go-servicekit/observability/logs` | slog handler; trace_id |
 | Counters, histograms, gauges | `github.com/fikrimohammad/go-servicekit/observability/metrics` | Metrics client |
 | Spans and a tracer client | `github.com/fikrimohammad/go-servicekit/observability/tracer` | Tracer client |
-| Typed config from file or etcd | `github.com/fikrimohammad/go-servicekit/conf` | One loader, one provider; strict boot |
-| File config provider | `github.com/fikrimohammad/go-servicekit/conf/providers/file` | YAML, JSON, TOML |
-| Etcd hot config provider | `github.com/fikrimohammad/go-servicekit/conf/providers/etcd` | Watch, resync, per-key formats |
+| Typed config from file or etcd | `github.com/fikrimohammad/go-servicekit/conf` | One loader, one source; strict boot |
 | An HTTP client for vendors | `github.com/fikrimohammad/go-servicekit/rest/client` | Hertz; retry, timeouts, RoundTripper |
 | An HTTP server at the edge | `github.com/fikrimohammad/go-servicekit/rest/server` | Hertz; problem+json, request ID |
 | To schedule recurring jobs | `github.com/fikrimohammad/go-servicekit/cron` | Job model |
@@ -63,6 +61,8 @@ GitHub Actions workflows live in `.github/workflows/`:
   must have a `doc.go` contract and a row in the import map.
 - **`coverage-report.yml`** — on PR. Runs tests with coverage per module and
   posts a per-module coverage table as a PR comment.
+- **`etcd-integration`** job in `ci.yml` runs the conf etcd integration tests
+  against a service container and fails if any test is skipped.
 - **`db-integration`** job in `ci.yml` runs the MySQL and PostgreSQL integration
   tests against service containers.
 - **`release-dry-run`** job in `ci.yml` runs the release script's unit tests,

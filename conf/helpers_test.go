@@ -5,7 +5,12 @@ import (
 	"reflect"
 	"sync"
 	"time"
+
+	confcore "github.com/fikrimohammad/go-servicekit/conf/internal/core"
 )
+
+// Event is a test alias for the internal provider event.
+type Event = confcore.Event
 
 type testConfig struct {
 	Checkout struct {
@@ -19,6 +24,30 @@ type fileConfig struct {
 	Checkout struct {
 		Timeout Getter[time.Duration] `conf:"name=ttl"`
 	} `conf:"folder=checkouts"`
+}
+
+type pointerFileConfig struct {
+	Ptr Getter[*int]
+}
+
+type namedInts []int
+
+type namedSliceFileConfig struct {
+	Values Getter[namedInts]
+}
+
+type textStringer interface {
+	String() string
+}
+
+type stringerValue struct {
+	V string
+}
+
+func (s stringerValue) String() string { return s.V }
+
+type stringerFileConfig struct {
+	Value Getter[textStringer]
 }
 
 type fakeProvider struct {
@@ -71,15 +100,19 @@ func (f *fakeProvider) closeCount() int {
 type fakeFormatter struct {
 	*fakeProvider
 	format Format
+	parse  func(raw string, t reflect.Type) (any, error)
 }
 
 func (f *fakeFormatter) Parse(raw string, t reflect.Type) (any, error) {
-	return parseValue(raw, t, f.format)
+	if f.parse != nil {
+		return f.parse(raw, t)
+	}
+	return confcore.ParseValue(raw, t, confcore.Format(f.format))
 }
 
 type fakeWatcher struct {
 	*fakeProvider
-	ch       chan Event
+	ch       chan confcore.Event
 	watchErr error
 
 	mu       sync.Mutex
@@ -87,7 +120,20 @@ type fakeWatcher struct {
 	canceled bool
 }
 
-func (f *fakeWatcher) Watch(ctx context.Context, rev int64) (<-chan Event, error) {
+type fakeFormatterWatcher struct {
+	*fakeWatcher
+	format Format
+	parse  func(raw string, t reflect.Type) (any, error)
+}
+
+func (f *fakeFormatterWatcher) Parse(raw string, t reflect.Type) (any, error) {
+	if f.parse != nil {
+		return f.parse(raw, t)
+	}
+	return confcore.ParseValue(raw, t, confcore.Format(f.format))
+}
+
+func (f *fakeWatcher) Watch(ctx context.Context, rev int64) (<-chan confcore.Event, error) {
 	if f.watchErr != nil {
 		return nil, f.watchErr
 	}
@@ -113,6 +159,11 @@ func (f *fakeWatcher) isCanceled() bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.canceled
+}
+
+// testSource wraps a fake provider for New.
+func testSource(p confcore.Provider) Source {
+	return Source{newProvider: func() confcore.Provider { return p }}
 }
 
 func validValues() map[string]string {

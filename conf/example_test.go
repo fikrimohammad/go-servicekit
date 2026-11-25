@@ -6,8 +6,6 @@ import (
 	"time"
 
 	"github.com/fikrimohammad/go-servicekit/conf"
-	"github.com/fikrimohammad/go-servicekit/conf/providers/etcd"
-	"github.com/fikrimohammad/go-servicekit/conf/providers/file"
 )
 
 type exampleBoot struct {
@@ -17,7 +15,7 @@ type exampleBoot struct {
 }
 
 func ExampleNew() {
-	loader, err := conf.New[exampleBoot](context.Background(), file.New(file.Config{
+	loader, err := conf.New[exampleBoot](context.Background(), conf.File(conf.FileConfig{
 		Path:   "testdata/app.yaml",
 		Format: conf.FormatYAML,
 	}))
@@ -33,10 +31,10 @@ func ExampleNew() {
 }
 
 func ExampleNew_etcd() {
-	p := etcd.New(etcd.Config{
+	source := conf.Etcd(conf.EtcdConfig{
 		Endpoint:  "localhost:2379",
 		Namespace: "disburseapp",
 	})
-	_ = p
-	// In a real program: loader, err := conf.New[hot](ctx, p)
+	_ = source
+	// In a real program: loader, err := conf.New[hot](ctx, source)
 }

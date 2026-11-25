@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"reflect"
 	"strings"
 
-	"github.com/fikrimohammad/go-servicekit/conf"
+	"github.com/fikrimohammad/go-servicekit/conf/internal/core"
 	"github.com/pelletier/go-toml/v2"
 	"gopkg.in/yaml.v3"
 )
@@ -28,12 +30,14 @@ func (p *Provider) Source() string { return "file" }
 // Parse decodes a raw value with the configured document format.
 func (p *Provider) Parse(raw string, t reflect.Type) (any, error) {
 	switch p.cfg.Format {
-	case conf.FormatJSON:
+	case core.FormatYAML:
+		return decodeYAML(raw, t)
+	case core.FormatJSON:
 		return decodeJSON(raw, t)
-	case conf.FormatTOML:
+	case core.FormatTOML:
 		return decodeTOML(raw, t)
 	default:
-		return decodeYAML(raw, t)
+		return nil, fmt.Errorf("%w: %q", core.ErrInvalidFormat, p.cfg.Format)
 	}
 }
 
@@ -50,13 +54,13 @@ func (p *Provider) Load(ctx context.Context, keys []string) (map[string]string, 
 
 	data, err := os.ReadFile(cfg.Path)
 	if err != nil {
-		return nil, 0, fmt.Errorf("%w: %v", conf.ErrInvalidConfig, err)
+		return nil, 0, fmt.Errorf("%w: %v", core.ErrInvalidConfig, err)
 	}
 
 	switch cfg.Format {
-	case conf.FormatJSON:
+	case core.FormatJSON:
 		return loadJSON(data, keys)
-	case conf.FormatTOML:
+	case core.FormatTOML:
 		return loadTOML(data, keys)
 	default:
 		return loadYAML(data, keys)
@@ -67,14 +71,14 @@ func (p *Provider) Load(ctx context.Context, keys []string) (map[string]string, 
 func (p *Provider) Close() error { return nil }
 
 var (
-	_ conf.Provider  = (*Provider)(nil)
-	_ conf.Formatter = (*Provider)(nil)
+	_ core.Provider  = (*Provider)(nil)
+	_ core.Formatter = (*Provider)(nil)
 )
 
 func decodeYAML(raw string, t reflect.Type) (any, error) {
 	ptr := reflect.New(t)
 	if err := yaml.Unmarshal([]byte(raw), ptr.Interface()); err != nil {
-		return nil, fmt.Errorf("%w: cannot decode YAML into %s", conf.ErrParse, t)
+		return nil, fmt.Errorf("%w: cannot decode YAML into %s", core.ErrParse, t)
 	}
 	return ptr.Elem().Interface(), nil
 }
@@ -82,7 +86,7 @@ func decodeYAML(raw string, t reflect.Type) (any, error) {
 func decodeJSON(raw string, t reflect.Type) (any, error) {
 	ptr := reflect.New(t)
 	if err := json.Unmarshal([]byte(raw), ptr.Interface()); err != nil {
-		return nil, fmt.Errorf("%w: cannot decode JSON into %s", conf.ErrParse, t)
+		return nil, fmt.Errorf("%w: cannot decode JSON into %s", core.ErrParse, t)
 	}
 	return ptr.Elem().Interface(), nil
 }
@@ -101,7 +105,7 @@ func decodeTOML(raw string, t reflect.Type) (any, error) {
 			return v.Interface(), nil
 		}
 	}
-	return nil, fmt.Errorf("%w: cannot decode TOML into %s", conf.ErrParse, t)
+	return nil, fmt.Errorf("%w: cannot decode TOML into %s", core.ErrParse, t)
 }
 
 func unmarshalTOML(data []byte, v any) error {
@@ -112,8 +116,18 @@ func unmarshalTOML(data []byte, v any) error {
 
 func loadYAML(data []byte, keys []string) (map[string]string, int64, error) {
 	var root yaml.Node
-	if err := yaml.Unmarshal(data, &root); err != nil {
-		return nil, 0, fmt.Errorf("%w: cannot parse YAML document", conf.ErrParse)
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	err := dec.Decode(&root)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return nil, 0, fmt.Errorf("%w: cannot parse YAML document", core.ErrParse)
+	}
+	if !errors.Is(err, io.EOF) {
+		var extra yaml.Node
+		if err := dec.Decode(&extra); err == nil {
+			return nil, 0, fmt.Errorf("%w: multiple YAML documents", core.ErrParse)
+		} else if !errors.Is(err, io.EOF) {
+			return nil, 0, fmt.Errorf("%w: cannot parse YAML document", core.ErrParse)
+		}
 	}
 
 	requested, prefixes := keyIndex(keys)
@@ -134,7 +148,7 @@ func walkYAML(node *yaml.Node, path string, requested, prefixes map[string]struc
 	if _, ok := requested[path]; ok {
 		raw, err := yaml.Marshal(node)
 		if err != nil {
-			return fmt.Errorf("%w: cannot encode YAML leaf %s", conf.ErrParse, path)
+			return fmt.Errorf("%w: cannot encode YAML leaf %s", core.ErrParse, path)
 		}
 		values[path] = string(raw)
 		return nil
@@ -155,7 +169,7 @@ func walkYAML(node *yaml.Node, path string, requested, prefixes map[string]struc
 		if _, ok := requested[childPath]; ok {
 			raw, err := yaml.Marshal(child)
 			if err != nil {
-				return fmt.Errorf("%w: cannot encode YAML leaf %s", conf.ErrParse, childPath)
+				return fmt.Errorf("%w: cannot encode YAML leaf %s", core.ErrParse, childPath)
 			}
 			values[childPath] = string(raw)
 			continue
@@ -176,7 +190,13 @@ func loadJSON(data []byte, keys []string) (map[string]string, int64, error) {
 	dec.UseNumber()
 	var root any
 	if err := dec.Decode(&root); err != nil {
-		return nil, 0, fmt.Errorf("%w: cannot parse JSON document", conf.ErrParse)
+		return nil, 0, fmt.Errorf("%w: cannot parse JSON document", core.ErrParse)
+	}
+	var extra any
+	if err := dec.Decode(&extra); err == nil {
+		return nil, 0, fmt.Errorf("%w: multiple JSON documents", core.ErrParse)
+	} else if !errors.Is(err, io.EOF) {
+		return nil, 0, fmt.Errorf("%w: cannot parse JSON document", core.ErrParse)
 	}
 
 	requested, prefixes := keyIndex(keys)
@@ -195,7 +215,7 @@ func walkJSON(value any, path string, requested, prefixes map[string]struct{}, v
 	if _, ok := requested[path]; ok {
 		raw, err := json.Marshal(value)
 		if err != nil {
-			return fmt.Errorf("%w: cannot encode JSON leaf %s", conf.ErrParse, path)
+			return fmt.Errorf("%w: cannot encode JSON leaf %s", core.ErrParse, path)
 		}
 		values[path] = string(raw)
 		return nil
@@ -214,7 +234,7 @@ func walkJSON(value any, path string, requested, prefixes map[string]struct{}, v
 		if _, ok := requested[childPath]; ok {
 			raw, err := json.Marshal(child)
 			if err != nil {
-				return fmt.Errorf("%w: cannot encode JSON leaf %s", conf.ErrParse, childPath)
+				return fmt.Errorf("%w: cannot encode JSON leaf %s", core.ErrParse, childPath)
 			}
 			values[childPath] = string(raw)
 			continue
@@ -233,7 +253,7 @@ func walkJSON(value any, path string, requested, prefixes map[string]struct{}, v
 func loadTOML(data []byte, keys []string) (map[string]string, int64, error) {
 	var root map[string]any
 	if err := toml.Unmarshal(data, &root); err != nil {
-		return nil, 0, fmt.Errorf("%w: cannot parse TOML document", conf.ErrParse)
+		return nil, 0, fmt.Errorf("%w: cannot parse TOML document", core.ErrParse)
 	}
 
 	requested, prefixes := keyIndex(keys)
@@ -252,7 +272,7 @@ func walkTOML(value any, path string, requested, prefixes map[string]struct{}, v
 	if _, ok := requested[path]; ok {
 		raw, err := tomlLeaf(value)
 		if err != nil {
-			return fmt.Errorf("%w: cannot encode TOML leaf %s", conf.ErrParse, path)
+			return fmt.Errorf("%w: cannot encode TOML leaf %s", core.ErrParse, path)
 		}
 		values[path] = raw
 		return nil
@@ -271,7 +291,7 @@ func walkTOML(value any, path string, requested, prefixes map[string]struct{}, v
 		if _, ok := requested[childPath]; ok {
 			raw, err := tomlLeaf(child)
 			if err != nil {
-				return fmt.Errorf("%w: cannot encode TOML leaf %s", conf.ErrParse, childPath)
+				return fmt.Errorf("%w: cannot encode TOML leaf %s", core.ErrParse, childPath)
 			}
 			values[childPath] = raw
 			continue
@@ -313,5 +333,5 @@ func unknownError(unknown []string) error {
 	if len(unknown) == 0 {
 		return nil
 	}
-	return fmt.Errorf("%w: %s", conf.ErrUnknownKey, strings.Join(unknown, ", "))
+	return fmt.Errorf("%w: %s", core.ErrUnknownKey, strings.Join(unknown, ", "))
 }

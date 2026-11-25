@@ -16,8 +16,8 @@ Run from `conf/` for every task that touches Go code:
 - `GOWORK=off go run ../.agents/skills/go-best-practices/scripts/gostyle.go ./...`
 - `go mod tidy -diff`
 
-Focused tests: `go test -count=1 ./providers/file`,
-`go test -count=1 ./providers/etcd`, or `go test -count=1 -run <Pattern> .`.
+Focused tests: `go test -count=1 ./internal/providers/file`,
+`go test -count=1 ./internal/providers/etcd`, or `go test -count=1 -run <Pattern> .`.
 
 Integration: `CONF_ETCD_ENDPOINT=127.0.0.1:2379 go test -count=1 -run Integration ./...`
 
@@ -97,7 +97,7 @@ includes the raw value.
 
 ## Task 3: `Getter[T]` and the `getterLeaf` binding marker
 
-**Description:** Add `Getter[T]` with the opaque `Core func() (any, error)`
+**Description:** Add `Getter[T]` with the unexported `core func() (any, error)`
 field, `Get`, `GetWithDefault`, `bind`, and the unexported `getterLeaf` marker
 in `conf.go`.
 
@@ -105,7 +105,7 @@ in `conf.go`.
 - [ ] `Get` returns the typed value on success, `ErrUnbound` for a zero
       `Getter`, and the underlying error otherwise.
 - [ ] `GetWithDefault` returns the default on any error and never panics.
-- [ ] `bind` sets `Core` on `*Getter[T]`.
+- [ ] `bind` sets `core` on `*Getter[T]`.
 - [ ] Table tests cover bound, zero, error, and `GetWithDefault` cases.
 
 **Verification:**
@@ -328,7 +328,7 @@ package defaults per operation.
 
 ## Task 10: `file.Config` defaults and validation
 
-**Description:** Add `providers/file.Config{Path, Format}`, `SetDefaults`, and
+**Description:** Add `internal/providers/file.Config{Path, Format}`, `SetDefaults`, and
 `Validate`. `Path` and `Format` are required; `FormatScalar` is rejected.
 
 **Acceptance criteria:**
@@ -338,14 +338,14 @@ package defaults per operation.
 - [ ] `SetDefaults` leaves the required fields untouched.
 
 **Verification:**
-- [ ] `cd conf && go test -count=1 ./providers/file`
+- [ ] `cd conf && go test -count=1 ./internal/providers/file`
 - [ ] Module checks.
 
 **Dependencies:** T2.
 
 **Files likely touched:**
-- `providers/file/config.go`
-- `providers/file/config_test.go`
+- `internal/providers/file/config.go`
+- `internal/providers/file/config_test.go`
 
 **Estimated scope:** S
 
@@ -359,7 +359,7 @@ paths, returns each leaf in the source format, errors on unknown nodes, and
 leaves missing keys absent. A `Getter[SomeStruct]` leaf is one key.
 
 **Acceptance criteria:**
-- [ ] `Provider` satisfies `conf.Provider` and `conf.Formatter` at compile time.
+- [ ] `Provider` satisfies `core.Provider` and `core.Formatter` at compile time.
 - [ ] `Format()` returns `cfg.Format`; `Source()` returns `"file"`.
 - [ ] A requested leaf returns the raw value in the source format.
 - [ ] An unknown node returns `ErrUnknownKey`; a missing leaf is absent.
@@ -367,14 +367,14 @@ leaves missing keys absent. A `Getter[SomeStruct]` leaf is one key.
 - [ ] `Close` is a no-op.
 
 **Verification:**
-- [ ] `cd conf && go test -count=1 ./providers/file`
+- [ ] `cd conf && go test -count=1 ./internal/providers/file`
 - [ ] Module checks.
 
 **Dependencies:** T4, T5, T10.
 
 **Files likely touched:**
-- `providers/file/file.go`
-- `providers/file/file_test.go`
+- `internal/providers/file/file.go`
+- `internal/providers/file/file_test.go`
 
 **Estimated scope:** M
 
@@ -396,14 +396,14 @@ and `Format`/`Source`.
 - [ ] `FormatScalar` is rejected.
 
 **Verification:**
-- [ ] `cd conf && go test -count=1 ./providers/file`
+- [ ] `cd conf && go test -count=1 ./internal/providers/file`
 - [ ] Module checks.
 
 **Dependencies:** T11.
 
 **Files likely touched:**
-- `providers/file/file_test.go`
-- `providers/file/testdata/*`
+- `internal/providers/file/file_test.go`
+- `internal/providers/file/testdata/*`
 
 **Estimated scope:** M
 
@@ -417,17 +417,17 @@ and `Format`/`Source`.
 **Acceptance criteria:**
 - [ ] The example runs with `go test` and no external service.
 - [ ] `doc.go` has `Package file ...` and the house headings.
-- [ ] `go doc -all ./providers/file` renders.
+- [ ] `go doc -all ./internal/providers/file` renders.
 
 **Verification:**
-- [ ] `cd conf && go test -count=1 ./providers/file`
-- [ ] `go doc -all ./providers/file`
+- [ ] `cd conf && go test -count=1 ./internal/providers/file`
+- [ ] `go doc -all ./internal/providers/file`
 
 **Dependencies:** T11.
 
 **Files likely touched:**
-- `providers/file/example_test.go`
-- `providers/file/doc.go`
+- `internal/providers/file/example_test.go`
+- `internal/providers/file/doc.go`
 
 **Estimated scope:** S
 
@@ -444,7 +444,7 @@ and `Format`/`Source`.
 
 ## Task 14: `etcd.Config` defaults and validation
 
-**Description:** Add `providers/etcd.Config` with Endpoint, Username, Password,
+**Description:** Add `internal/providers/etcd.Config` with Endpoint, Username, Password,
 Namespace, DialTimeout, and TLS; `SetDefaults` (5s dial); `Validate` (endpoint
 host:port, namespace, auth both-or-neither).
 
@@ -455,14 +455,14 @@ host:port, namespace, auth both-or-neither).
 - [ ] A nil TLS config is valid.
 
 **Verification:**
-- [ ] `cd conf && go test -count=1 ./providers/etcd`
+- [ ] `cd conf && go test -count=1 ./internal/providers/etcd`
 - [ ] Module checks.
 
 **Dependencies:** T1.
 
 **Files likely touched:**
-- `providers/etcd/config.go`
-- `providers/etcd/config_test.go`
+- `internal/providers/etcd/config.go`
+- `internal/providers/etcd/config_test.go`
 
 **Estimated scope:** S
 
@@ -475,8 +475,8 @@ the config, opens one `clientv3` client, performs one prefix `Get`, filters to
 the requested keys, and returns the raw values plus the header revision.
 
 **Acceptance criteria:**
-- [ ] `Provider` satisfies `conf.Provider` at compile time; it does not
-      implement `conf.Formatter`.
+- [ ] `Provider` satisfies `core.Provider` at compile time; it does not
+      implement `core.Formatter`.
 - [ ] `Source()` returns `"etcd"`.
 - [ ] Keys are `<namespace>/<key>`; the prefix is `<namespace>/`.
 - [ ] Only requested keys are returned; other keys are ignored.
@@ -484,14 +484,14 @@ the requested keys, and returns the raw values plus the header revision.
 - [ ] `Close` is idempotent and safe after a failed `Load`.
 
 **Verification:**
-- [ ] `cd conf && go test -count=1 ./providers/etcd`
+- [ ] `cd conf && go test -count=1 ./internal/providers/etcd`
 - [ ] Module checks.
 
 **Dependencies:** T4, T14.
 
 **Files likely touched:**
-- `providers/etcd/etcd.go`
-- `providers/etcd/etcd_test.go`
+- `internal/providers/etcd/etcd.go`
+- `internal/providers/etcd/etcd_test.go`
 
 **Estimated scope:** M
 
@@ -512,14 +512,14 @@ retry with exponential backoff, and emit a `Reset` after a compaction resync.
 - [ ] The event mapping has unit tests.
 
 **Verification:**
-- [ ] `cd conf && go test -count=1 ./providers/etcd`
+- [ ] `cd conf && go test -count=1 ./internal/providers/etcd`
 - [ ] Module checks.
 
 **Dependencies:** T15.
 
 **Files likely touched:**
-- `providers/etcd/etcd.go`
-- `providers/etcd/etcd_test.go`
+- `internal/providers/etcd/etcd.go`
+- `internal/providers/etcd/etcd_test.go`
 
 **Estimated scope:** M
 
@@ -541,15 +541,15 @@ example, and the package doc. The integration test skips without
 - [ ] `doc.go` follows the house format.
 
 **Verification:**
-- [ ] `CONF_ETCD_ENDPOINT=127.0.0.1:2379 go test -count=1 -run Integration ./providers/etcd`
-- [ ] `GOWORK=off go doc -all ./providers/etcd`
+- [ ] `CONF_ETCD_ENDPOINT=127.0.0.1:2379 go test -count=1 -run Integration ./internal/providers/etcd`
+- [ ] `GOWORK=off go doc -all ./internal/providers/etcd`
 
 **Dependencies:** T16.
 
 **Files likely touched:**
-- `providers/etcd/integration_test.go`
-- `providers/etcd/example_test.go`
-- `providers/etcd/doc.go`
+- `internal/providers/etcd/integration_test.go`
+- `internal/providers/etcd/example_test.go`
+- `internal/providers/etcd/doc.go`
 
 **Estimated scope:** M
 
@@ -619,8 +619,8 @@ operations, telemetry).
 
 ## Task 20: Package docs in the house format
 
-**Description:** Finish `conf/doc.go`, `providers/file/doc.go`, and
-`providers/etcd/doc.go` with the house sections: When to use, Import, Minimal
+**Description:** Finish `conf/doc.go`, `internal/providers/file/doc.go`, and
+`internal/providers/etcd/doc.go` with the house sections: When to use, Import, Minimal
 example, Key derivation/Formats, Lifecycle, Common mistakes, Test recipe.
 
 **Acceptance criteria:**
@@ -631,15 +631,15 @@ example, Key derivation/Formats, Lifecycle, Common mistakes, Test recipe.
 - [ ] No duplicate package comment remains in `conf.go`.
 
 **Verification:**
-- [ ] `cd conf && GOWORK=off go doc -all . && GOWORK=off go doc -all ./providers/file && GOWORK=off go doc -all ./providers/etcd`
+- [ ] `cd conf && GOWORK=off go doc -all . && GOWORK=off go doc -all ./internal/providers/file && GOWORK=off go doc -all ./internal/providers/etcd`
 - [ ] Module checks.
 
 **Dependencies:** T19.
 
 **Files likely touched:**
 - `conf/doc.go`
-- `providers/file/doc.go`
-- `providers/etcd/doc.go`
+- `internal/providers/file/doc.go`
+- `internal/providers/etcd/doc.go`
 
 **Estimated scope:** S
 
@@ -692,7 +692,7 @@ Criteria, and record any deviation. No code changes unless a check fails.
 
 **Verification:**
 - [ ] Run the full Commands from the spec.
-- [ ] `cd conf && GOWORK=off go doc -all . && GOWORK=off go doc -all ./providers/file && GOWORK=off go doc -all ./providers/etcd`
+- [ ] `cd conf && GOWORK=off go doc -all . && GOWORK=off go doc -all ./internal/providers/file && GOWORK=off go doc -all ./internal/providers/etcd`
 - [ ] Review the spec checklist with the owner.
 
 **Dependencies:** T1–T21.

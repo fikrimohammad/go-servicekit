@@ -1,20 +1,15 @@
-// Package conf loads and watches typed configuration from pluggable
-// providers.
+// Package conf loads and watches typed configuration from file or etcd.
 //
 // # When to use
 //
 // Use conf when a service has two kinds of configuration: a boot set loaded
 // once from a file, and a hot set that must change without a restart. One
-// loader binds one provider, every leaf is a typed Getter, reads never touch
-// the network, boot is strict, and State reports the truth.
+// loader binds one source, every leaf is a typed Getter, reads never touch the
+// network, boot is strict, and State reports the truth.
 //
 // # Import
 //
-//	import (
-//		"github.com/fikrimohammad/go-servicekit/conf"
-//		"github.com/fikrimohammad/go-servicekit/conf/providers/etcd"
-//		"github.com/fikrimohammad/go-servicekit/conf/providers/file"
-//	)
+//	import "github.com/fikrimohammad/go-servicekit/conf"
 //
 // # Minimal example
 //
@@ -24,7 +19,7 @@
 //		} `conf:"folder=checkouts"`
 //	}
 //
-//	loader, err := conf.New[Boot](ctx, file.New(file.Config{
+//	loader, err := conf.New[Boot](ctx, conf.File(conf.FileConfig{
 //		Path:   "disburseapp.prod.yaml",
 //		Format: conf.FormatYAML,
 //	}))
@@ -34,6 +29,13 @@
 //	defer loader.Close()
 //
 //	ttl := loader.Data().Checkout.TTL.GetWithDefault(30 * time.Second)
+//
+// Use [Etcd] instead of [File] for a watched etcd source:
+//
+//	loader, err := conf.New[Hot](ctx, conf.Etcd(conf.EtcdConfig{
+//		Endpoint:  os.Getenv("ETCD_ENDPOINT"),
+//		Namespace: "disburseapp",
+//	}))
 //
 // # Key derivation
 //
@@ -52,18 +54,21 @@
 //
 // # Formats
 //
-// A file provider owns its document format through its Config and implements
-// Formatter.Parse; leaves must not carry a format tag. An etcd provider owns no
-// format; every leaf must declare a format tag: yaml, json, toml, or scalar.
+// A file source owns its document format through FileConfig and applies it to
+// the whole document; leaves must not carry a format tag. An etcd source owns
+// no format; every leaf must declare a format tag: yaml, json, toml, or scalar.
 // There is no format sniffing.
 //
 // # Lifecycle
 //
-// New loads the provider once, requires every key, decodes every value, and
-// binds the Getters. An etcd provider then watches from the load revision. A
-// bad update keeps last-known-good and sets StateDegraded; a later good value
-// returns StateLive. Reads are per-key atomic; two reads can span a reload.
-// Close cancels the watch, waits for it, and closes the provider. Reads after
+// New loads the source once, requires every key, decodes every value, and binds
+// the Getters. An etcd source then watches from the load revision. The loader
+// owns the watch: canceling the context passed to New stops the boot load but
+// not the watch; only Close stops it. A bad update keeps last-known-good and
+// sets StateDegraded; a later good value returns StateLive. Reads are per-key
+// atomic; two reads can span a reload. Getter.Get returns a deep copy, so
+// callers can mutate maps, slices, and pointers without changing the snapshot.
+// Close cancels the watch, waits for it, and closes the source. Reads after
 // close return ErrClosed, and State is StateClosed.
 //
 // # Common mistakes
@@ -76,7 +81,7 @@
 //
 // # Test recipe
 //
-// Use a temp file for providers/file; a fake Provider and Watcher for loader
-// tests; CONF_ETCD_ENDPOINT for the integration tests. The package examples run
-// with go test.
+// Use a temp file with [File]; set CONF_ETCD_ENDPOINT and use [Etcd] for the
+// integration tests. The loader tests use fake providers. The package examples
+// run with go test.
 package conf

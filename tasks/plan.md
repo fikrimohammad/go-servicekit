@@ -18,8 +18,9 @@ pass against a local etcd 3.5.17 (root loader, watch, compaction resync).
 
 ## Architecture Decisions
 
-- **One loader, one provider.** `conf.New[T](ctx, p, opts...)`; `providers/file`
-  and `providers/etcd` are separate packages. No merge or precedence.
+- **One loader, one source.** `conf.New[T](ctx, source, opts...)`; the file and
+  etcd providers live under `internal/providers` and are reached through
+  `conf.File` and `conf.Etcd`. No merge or precedence.
 - **Provider capabilities.** `Provider` (Source, Load, Close) is required;
   `Watcher` (Watch) and `Formatter` (Format) are optional type assertions.
 - **Format ownership.** `Formatter` means the provider owns one format for every

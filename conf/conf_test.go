@@ -3,6 +3,7 @@ package conf
 import (
 	"context"
 	"errors"
+	"reflect"
 	"slices"
 	"testing"
 	"time"
@@ -10,7 +11,7 @@ import (
 
 func TestNew(t *testing.T) {
 	p := &fakeProvider{values: validValues()}
-	loader, err := New[testConfig](context.Background(), p)
+	loader, err := New[testConfig](context.Background(), testSource(p))
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -35,9 +36,20 @@ func TestNew(t *testing.T) {
 	}
 }
 
+func TestDataCopyIsLive(t *testing.T) {
+	ch := make(chan Event, 1)
+	loader, _ := newWatchLoader(t, ch)
+	data := loader.Data()
+
+	ch <- Event{Key: "toggle_switch", Value: "false"}
+	waitFor(t, func() bool {
+		return !data.KillSwitch.GetWithDefault(true)
+	})
+}
+
 func TestNewMissingKey(t *testing.T) {
 	p := &fakeProvider{values: map[string]string{"checkouts/ttl": "30s"}}
-	_, err := New[testConfig](context.Background(), p)
+	_, err := New[testConfig](context.Background(), testSource(p))
 	if !errors.Is(err, ErrMissingKey) {
 		t.Fatalf("New() error = %v, want ErrMissingKey", err)
 	}
@@ -50,30 +62,53 @@ func TestNewParseFailure(t *testing.T) {
 	values := validValues()
 	values["checkouts/ttl"] = "not-a-duration"
 	p := &fakeProvider{values: values}
-	_, err := New[testConfig](context.Background(), p)
+	_, err := New[testConfig](context.Background(), testSource(p))
 	if !errors.Is(err, ErrParse) {
 		t.Fatalf("New() error = %v, want ErrParse", err)
 	}
 }
 
 func TestNewNilProvider(t *testing.T) {
-	_, err := New[testConfig](context.Background(), nil)
+	_, err := New[testConfig](context.Background(), Source{})
+	if !errors.Is(err, ErrInvalidConfig) {
+		t.Fatalf("New() error = %v, want ErrInvalidConfig", err)
+	}
+}
+
+func TestNewTypedNilProvider(t *testing.T) {
+	var p *fakeProvider
+	_, err := New[testConfig](t.Context(), testSource(p))
 	if !errors.Is(err, ErrInvalidConfig) {
 		t.Fatalf("New() error = %v, want ErrInvalidConfig", err)
 	}
 }
 
 func TestNewNonStruct(t *testing.T) {
-	_, err := New[int](context.Background(), &fakeProvider{})
+	p := &fakeProvider{}
+	_, err := New[int](t.Context(), testSource(p))
 	if !errors.Is(err, ErrInvalidType) {
 		t.Fatalf("New() error = %v, want ErrInvalidType", err)
+	}
+	if got := p.closeCount(); got != 0 {
+		t.Errorf("provider Close calls = %d, want 0; the provider was not created", got)
+	}
+}
+
+func TestNewOptionError(t *testing.T) {
+	optErr := errors.New("bad option")
+	p := &fakeProvider{values: validValues()}
+	_, err := New[testConfig](t.Context(), testSource(p), func(*options) error {
+		return optErr
+	})
+	if !errors.Is(err, optErr) {
+		t.Fatalf("New() error = %v, want %v", err, optErr)
 	}
 }
 
 func TestNewLoadErrorClosesProvider(t *testing.T) {
 	loadErr := errors.New("load failed")
 	p := &fakeProvider{loadErr: loadErr}
-	_, err := New[testConfig](context.Background(), p)
+	_, err := New[testConfig](context.Background(), testSource(p))
 	if !errors.Is(err, loadErr) {
 		t.Fatalf("New() error = %v, want %v", err, loadErr)
 	}
@@ -87,7 +122,7 @@ func TestNewFileMode(t *testing.T) {
 		fakeProvider: &fakeProvider{values: map[string]string{"checkouts/ttl": "30s"}},
 		format:       FormatYAML,
 	}
-	loader, err := New[fileConfig](context.Background(), p)
+	loader, err := New[fileConfig](context.Background(), testSource(p))
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -98,12 +133,113 @@ func TestNewFileMode(t *testing.T) {
 	}
 }
 
+func TestNewFormatterWrongType(t *testing.T) {
+	p := &fakeFormatter{
+		fakeProvider: &fakeProvider{values: map[string]string{"checkouts/ttl": "30s"}},
+		parse: func(string, reflect.Type) (any, error) {
+			return "wrong", nil
+		},
+	}
+	_, err := New[fileConfig](t.Context(), testSource(p))
+	if !errors.Is(err, ErrParse) {
+		t.Fatalf("New() error = %v, want ErrParse", err)
+	}
+	if !errors.Is(err, ErrInvalidType) {
+		t.Fatalf("New() error = %v, want ErrInvalidType", err)
+	}
+	if got := p.closeCount(); got != 1 {
+		t.Errorf("provider Close calls = %d, want 1", got)
+	}
+}
+
+func TestNewFormatterNilForValue(t *testing.T) {
+	p := &fakeFormatter{
+		fakeProvider: &fakeProvider{values: map[string]string{"checkouts/ttl": "30s"}},
+		parse: func(string, reflect.Type) (any, error) {
+			return nil, nil
+		},
+	}
+	_, err := New[fileConfig](t.Context(), testSource(p))
+	if !errors.Is(err, ErrParse) {
+		t.Fatalf("New() error = %v, want ErrParse", err)
+	}
+	if !errors.Is(err, ErrInvalidType) {
+		t.Fatalf("New() error = %v, want ErrInvalidType", err)
+	}
+}
+
+func TestNewFormatterNilForPointer(t *testing.T) {
+	p := &fakeFormatter{
+		fakeProvider: &fakeProvider{values: map[string]string{"ptr": "x"}},
+		parse: func(string, reflect.Type) (any, error) {
+			return nil, nil
+		},
+	}
+	loader, err := New[pointerFileConfig](t.Context(), testSource(p))
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	t.Cleanup(func() { _ = loader.Close() })
+
+	got, err := loader.Data().Ptr.Get()
+	if err != nil {
+		t.Fatalf("Get() error = %v", err)
+	}
+	if got != nil {
+		t.Errorf("Get() = %v, want nil", got)
+	}
+}
+
+func TestNewFormatterNormalizesAssignable(t *testing.T) {
+	p := &fakeFormatter{
+		fakeProvider: &fakeProvider{values: map[string]string{"values": "[1,2]"}},
+		parse: func(string, reflect.Type) (any, error) {
+			return []int{1, 2}, nil
+		},
+	}
+	loader, err := New[namedSliceFileConfig](t.Context(), testSource(p))
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	t.Cleanup(func() { _ = loader.Close() })
+
+	got, err := loader.Data().Values.Get()
+	if err != nil {
+		t.Fatalf("Get() error = %v", err)
+	}
+	if want := []int{1, 2}; !slices.Equal([]int(got), want) {
+		t.Errorf("Values = %v, want %v", got, want)
+	}
+}
+
+func TestNewFormatterNormalizesInterface(t *testing.T) {
+	p := &fakeFormatter{
+		fakeProvider: &fakeProvider{values: map[string]string{"value": "x"}},
+		parse: func(string, reflect.Type) (any, error) {
+			return stringerValue{V: "x"}, nil
+		},
+	}
+	loader, err := New[stringerFileConfig](t.Context(), testSource(p))
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	t.Cleanup(func() { _ = loader.Close() })
+
+	got, err := loader.Data().Value.Get()
+	if err != nil {
+		t.Fatalf("Get() error = %v", err)
+	}
+	if got.String() != "x" {
+		t.Errorf("Value = %q, want x", got.String())
+	}
+}
+
 func TestNewFileModeRejectsFormatTag(t *testing.T) {
 	p := &fakeFormatter{
 		fakeProvider: &fakeProvider{values: validValues()},
 		format:       FormatYAML,
 	}
-	_, err := New[testConfig](context.Background(), p)
+	_, err := New[testConfig](context.Background(), testSource(p))
 	if !errors.Is(err, ErrInvalidTag) {
 		t.Fatalf("New() error = %v, want ErrInvalidTag", err)
 	}
@@ -111,7 +247,7 @@ func TestNewFileModeRejectsFormatTag(t *testing.T) {
 
 func TestNewRemoteRequiresFormat(t *testing.T) {
 	p := &fakeProvider{values: map[string]string{"checkouts/ttl": "30s"}}
-	_, err := New[fileConfig](context.Background(), p)
+	_, err := New[fileConfig](context.Background(), testSource(p))
 	if !errors.Is(err, ErrMissingFormat) {
 		t.Fatalf("New() error = %v, want ErrMissingFormat", err)
 	}
@@ -119,7 +255,7 @@ func TestNewRemoteRequiresFormat(t *testing.T) {
 
 func TestClose(t *testing.T) {
 	p := &fakeProvider{values: validValues()}
-	loader, err := New[testConfig](context.Background(), p)
+	loader, err := New[testConfig](context.Background(), testSource(p))
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
