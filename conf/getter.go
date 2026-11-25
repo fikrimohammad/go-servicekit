@@ -48,7 +48,7 @@ func (g Getter[T]) Get() (T, error) {
 // GetWithDefault returns a copy of the latest value, or def when the value is
 // absent, the Getter is unbound, the loader is closed, or the stored value has
 // the wrong type. It never fails.
-func (g Getter[T]) GetWithDefault(def T) T { // gostyle:ignore getter-prefix GetWithDefault pairs with Get on Getter; the concept is literally a get.
+func (g Getter[T]) GetWithDefault(def T) T {
 	if g.core == nil {
 		return def
 	}

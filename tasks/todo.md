@@ -13,7 +13,8 @@ Run from `conf/` for every task that touches Go code:
 - `go test -count=1 ./...`
 - `go test -count=1 -race ./...` at checkpoints
 - `golangci-lint run ./...`
-- `GOWORK=off go run ../.agents/skills/go-best-practices/scripts/gostyle.go ./...`
+- `GOWORK=off go run ../.github/scripts/sdkcheck/sdkcheck.go ./...`
+- `GOWORK=off go run ../.github/scripts/otelcheck/otelcheck.go ./...`
 - `go mod tidy -diff`
 
 Focused tests: `go test -count=1 ./internal/providers/file`,
@@ -683,7 +684,7 @@ Criteria, and record any deviation. No code changes unless a check fails.
 
 **Acceptance criteria:**
 - [ ] `gofmt`, `go vet`, `go test`, `go test -race`, `golangci-lint`, and
-      gostyle report zero findings in `conf/`.
+      sdkcheck and otelcheck report zero findings in `conf/`.
 - [ ] `go mod tidy -diff` is clean.
 - [ ] The etcd integration tests pass with `CONF_ETCD_ENDPOINT` and skip
       without it.

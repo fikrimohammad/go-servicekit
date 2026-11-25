@@ -101,7 +101,11 @@ func parseTOMLScalar(raw string, t reflect.Type) (any, error) {
 func parseScalar(raw string, t reflect.Type) (any, error) {
 	ptr := reflect.New(t)
 	if ptr.Type().Implements(textUnmarshalerType) {
-		if err := ptr.Interface().(encoding.TextUnmarshaler).UnmarshalText([]byte(raw)); err != nil {
+		tu, ok := reflect.TypeAssert[encoding.TextUnmarshaler](ptr)
+		if !ok {
+			return nil, fmt.Errorf("%w: cannot decode scalar into %s", ErrParse, t)
+		}
+		if err := tu.UnmarshalText([]byte(raw)); err != nil {
 			return nil, fmt.Errorf("%w: cannot decode scalar into %s", ErrParse, t)
 		}
 		return ptr.Elem().Interface(), nil

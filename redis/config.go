@@ -85,11 +85,12 @@ const (
 func (c Config) SetDefaults() Config {
 	c.Mode = Mode(strings.ToLower(strings.TrimSpace(string(c.Mode))))
 	if c.Mode == "" {
-		if c.MasterName != "" {
+		switch {
+		case c.MasterName != "":
 			c.Mode = ModeSentinel
-		} else if len(c.Addrs) > 1 {
+		case len(c.Addrs) > 1:
 			c.Mode = ModeCluster
-		} else {
+		default:
 			c.Mode = ModeStandalone
 		}
 	}

@@ -15,9 +15,9 @@ permissions:
 env:
   GO_VERSION: "1.26.5"
   GOLANGCI_VERSION: v2.15.0
-  # Every module is strict (full-tree golangci-lint and gostyle) unless it is listed
-  # here. The list may only shrink: remove a module in the commit that makes it clean.
-  # Never add one without the owner's approval.
+  # Every module is strict (full-tree golangci-lint, sdkcheck, and otelcheck)
+  # unless it is listed here. The list may only shrink: remove a module in the
+  # commit that makes it clean. Never add one without the owner's approval.
   LAX_MODULES: '[]'
 
 jobs:
@@ -34,8 +34,8 @@ jobs:
             | sed 's|^\./||' | sort | jq -R -s -c 'split("\n") | map(select(length > 0))')
           echo "modules=$modules" >> "$GITHUB_OUTPUT"
 
-  gostyle:
-    name: gostyle self-test
+  sdkcheck:
+    name: sdkcheck & otelcheck self-test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -44,8 +44,11 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
 
-      - name: Test gostyle
-        run: cd .agents/skills/go-best-practices/scripts && GOWORK=off go test -count=1 gostyle.go gostyle_test.go
+      - name: Test sdkcheck
+        run: cd .github/scripts/sdkcheck && GOWORK=off go test -count=1 sdkcheck.go sdkcheck_test.go
+
+      - name: Test otelcheck
+        run: cd .github/scripts/otelcheck && GOWORK=off go test -count=1 otelcheck.go otelcheck_test.go
 
   doc-contracts:
     name: doc contracts
@@ -110,9 +113,11 @@ jobs:
           # uncached run of a module takes seconds, so results stay deterministic.
           skip-cache: true
 
-      - name: Style
+      - name: Custom Go & OTel checks
         if: ${{ !contains(fromJSON(env.LAX_MODULES), matrix.module) }}
-        run: GOWORK=off go run ../.agents/skills/go-best-practices/scripts/gostyle.go ./...
+        run: |
+          GOWORK=off go run ../.github/scripts/sdkcheck/sdkcheck.go ./...
+          GOWORK=off go run ../.github/scripts/otelcheck/otelcheck.go ./...
 
       - name: Vet
         run: go vet ./...

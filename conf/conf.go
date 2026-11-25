@@ -243,7 +243,11 @@ func New[T any](ctx context.Context, source Source, opts ...Option) (loader *Loa
 		binder.bind(func() (any, error) { return core.get(key) })
 	}
 
-	loader = &Loader[T]{core: core, data: dataVal.Interface().(T)}
+	data, ok := reflect.TypeAssert[T](dataVal)
+	if !ok {
+		return nil, fmt.Errorf("%w: unexpected config struct type %s", ErrInvalidType, dataVal.Type())
+	}
+	loader = &Loader[T]{core: core, data: data}
 
 	if w, ok := p.(confcore.Watcher); ok {
 		watchCtx, cancel := context.WithCancel(context.WithoutCancel(baseCtx))
@@ -313,32 +317,11 @@ func isNilable(t reflect.Type) bool {
 	}
 }
 
-func (c *loaderCore) get(key string) (any, error) {
-	if c.closed.Load() {
-		return nil, ErrClosed
-	}
-	s := c.snapshot.Load()
-	if s == nil {
-		return nil, ErrNotSet
-	}
-	v, ok := s.values[key]
-	if !ok {
-		return nil, ErrNotSet
-	}
-	return v, nil
-}
-
 // State reports the loader's health and lifecycle state.
 func (c *loaderCore) State() State {
 	c.stateMu.Lock()
 	defer c.stateMu.Unlock()
 	return c.state
-}
-
-func (c *loaderCore) setState(s State) {
-	c.stateMu.Lock()
-	c.state = s
-	c.stateMu.Unlock()
 }
 
 // Close stops the watch and closes the provider. It is idempotent.
@@ -358,4 +341,25 @@ func (c *loaderCore) Close() error {
 		}
 	})
 	return c.closeErr
+}
+
+func (c *loaderCore) get(key string) (any, error) {
+	if c.closed.Load() {
+		return nil, ErrClosed
+	}
+	s := c.snapshot.Load()
+	if s == nil {
+		return nil, ErrNotSet
+	}
+	v, ok := s.values[key]
+	if !ok {
+		return nil, ErrNotSet
+	}
+	return v, nil
+}
+
+func (c *loaderCore) setState(s State) {
+	c.stateMu.Lock()
+	c.state = s
+	c.stateMu.Unlock()
 }

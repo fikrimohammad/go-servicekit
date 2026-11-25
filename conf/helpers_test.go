@@ -99,6 +99,7 @@ func (f *fakeProvider) closeCount() int {
 
 type fakeFormatter struct {
 	*fakeProvider
+
 	format Format
 	parse  func(raw string, t reflect.Type) (any, error)
 }
@@ -112,6 +113,7 @@ func (f *fakeFormatter) Parse(raw string, t reflect.Type) (any, error) {
 
 type fakeWatcher struct {
 	*fakeProvider
+
 	ch       chan confcore.Event
 	watchErr error
 
@@ -122,6 +124,7 @@ type fakeWatcher struct {
 
 type fakeFormatterWatcher struct {
 	*fakeWatcher
+
 	format Format
 	parse  func(raw string, t reflect.Type) (any, error)
 }

@@ -13,8 +13,8 @@ empty `LAX_MODULES`.
 This plan replaces the completed agent-consumable-sdk plan (all tasks done).
 
 **Status 2026-11-08:** T1–T22 are implemented on `feat/conf-module`. Unit,
-race, lint, gostyle, and doc-contract checks pass. The etcd integration tests
-pass against a local etcd 3.5.17 (root loader, watch, compaction resync).
+race, lint, sdkcheck, otelcheck, and doc-contract checks pass. The etcd integration tests
+pass against a local etcd 3.7.1 (root loader, watch, compaction resync).
 
 ## Architecture Decisions
 
@@ -96,7 +96,7 @@ the module is ready for review.
 | `Getter` reflection binding | Medium | T3/T5 test the marker, binding, and zero value before the loader exists |
 | Format-specific unmarshalers regress | High | T12 asserts `UnmarshalJSON`/`UnmarshalYAML`/`UnmarshalTOML`, a large JSON int, and a TOML date |
 | Telemetry names drift from the contract | Medium | T9 asserts exact names, units, kinds, and attributes; T22 re-runs it |
-| Strict lint on a new module | Medium | T1 uses the sibling `go.mod` shape; run `golangci-lint` and gostyle from T1 |
+| Strict lint on a new module | Medium | T1 uses the sibling `go.mod` shape; run `golangci-lint`, sdkcheck, and otelcheck from T1 |
 | Deleting `confloader` breaks an unseen consumer | Low | No in-repo importers; pre-1.0; release notes call it out |
 
 ## Parallelization

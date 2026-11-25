@@ -104,90 +104,6 @@ var (
 
 var noopMeterProvider = metricnoop.NewMeterProvider()
 
-// prepare acquires the stop read lock and resolves the instrument. The
-// returned release function must be called after recording.
-func (c *otelMetrics) prepare(kind instrumentKind, instrument Instrument) (*instrumentEntry, func(), error) {
-	c.stopMu.RLock()
-	if c.stopped.Load() {
-		c.stopMu.RUnlock()
-		return nil, nil, ErrStopped
-	}
-	entry, err := c.instrument(kind, instrument)
-	if err != nil {
-		c.stopMu.RUnlock()
-		return nil, nil, err
-	}
-	return entry, c.stopMu.RUnlock, nil
-}
-
-func (c *otelMetrics) instrument(kind instrumentKind, instrument Instrument) (*instrumentEntry, error) {
-	name, err := validateInstrument(instrument)
-	if err != nil {
-		return nil, err
-	}
-	if v, ok := c.instruments.Load(name); ok {
-		entry := v.(*instrumentEntry)
-		if err := entry.matches(kind, instrument); err != nil {
-			return nil, err
-		}
-		return entry, nil
-	}
-
-	entry := &instrumentEntry{kind: kind, unit: instrument.Unit, description: instrument.Description}
-	switch kind {
-	case kindCounter:
-		entry.counter, err = c.meter.Int64Counter(name,
-			metric.WithUnit(instrument.Unit),
-			metric.WithDescription(instrument.Description),
-		)
-	case kindHistogram:
-		entry.histogram, err = c.meter.Float64Histogram(name,
-			metric.WithUnit(instrument.Unit),
-			metric.WithDescription(instrument.Description),
-		)
-	case kindUpDown:
-		entry.upDown, err = c.meter.Int64UpDownCounter(name,
-			metric.WithUnit(instrument.Unit),
-			metric.WithDescription(instrument.Description),
-		)
-	case kindGauge:
-		entry.gauge, err = c.meter.Float64Gauge(name,
-			metric.WithUnit(instrument.Unit),
-			metric.WithDescription(instrument.Description),
-		)
-	default:
-		return nil, fmt.Errorf("metrics: unknown instrument kind %q", kind)
-	}
-	if err != nil {
-		return nil, fmt.Errorf("metrics: create %s %q: %w", kind, name, err)
-	}
-
-	actual, loaded := c.instruments.LoadOrStore(name, entry)
-	if !loaded {
-		return entry, nil
-	}
-	existing := actual.(*instrumentEntry)
-	if err := existing.matches(kind, instrument); err != nil {
-		return nil, err
-	}
-	return existing, nil
-}
-
-func (e *instrumentEntry) matches(kind instrumentKind, instrument Instrument) error {
-	if e.kind == kind && e.unit == instrument.Unit && e.description == instrument.Description {
-		return nil
-	}
-	return fmt.Errorf("%w: %q is already registered as %s (unit=%q, description=%q)",
-		ErrInstrumentConflict, instrument.Name, e.kind, e.unit, e.description)
-}
-
-func validateInstrument(instrument Instrument) (string, error) {
-	if !metricNamePattern.MatchString(instrument.Name) {
-		return "", fmt.Errorf("%w: %q", ErrInvalidMetricName, instrument.Name)
-	}
-	return instrument.Name, nil
-}
-
 func (c *otelMetrics) Add(ctx context.Context, instrument Instrument, value int64, attrs map[string]any) error {
 	entry, release, err := c.prepare(kindCounter, instrument)
 	if err != nil {
@@ -244,6 +160,96 @@ func (c *otelMetrics) Stop(ctx context.Context) error {
 	c.stopErr = c.shutdown(ctx)
 	c.stopped.Store(true)
 	return c.stopErr
+}
+
+// prepare acquires the stop read lock and resolves the instrument. The
+// returned release function must be called after recording.
+func (c *otelMetrics) prepare(kind instrumentKind, instrument Instrument) (*instrumentEntry, func(), error) {
+	c.stopMu.RLock()
+	if c.stopped.Load() {
+		c.stopMu.RUnlock()
+		return nil, nil, ErrStopped
+	}
+	entry, err := c.instrument(kind, instrument)
+	if err != nil {
+		c.stopMu.RUnlock()
+		return nil, nil, err
+	}
+	return entry, c.stopMu.RUnlock, nil
+}
+
+func (c *otelMetrics) instrument(kind instrumentKind, instrument Instrument) (*instrumentEntry, error) {
+	name, err := validateInstrument(instrument)
+	if err != nil {
+		return nil, err
+	}
+	if v, ok := c.instruments.Load(name); ok {
+		entry, ok := v.(*instrumentEntry)
+		if !ok {
+			return nil, fmt.Errorf("metrics: unexpected entry type %T for %q", v, name)
+		}
+		if err := entry.matches(kind, instrument); err != nil {
+			return nil, err
+		}
+		return entry, nil
+	}
+
+	entry := &instrumentEntry{kind: kind, unit: instrument.Unit, description: instrument.Description}
+	switch kind {
+	case kindCounter:
+		entry.counter, err = c.meter.Int64Counter(name,
+			metric.WithUnit(instrument.Unit),
+			metric.WithDescription(instrument.Description),
+		)
+	case kindHistogram:
+		entry.histogram, err = c.meter.Float64Histogram(name,
+			metric.WithUnit(instrument.Unit),
+			metric.WithDescription(instrument.Description),
+		)
+	case kindUpDown:
+		entry.upDown, err = c.meter.Int64UpDownCounter(name,
+			metric.WithUnit(instrument.Unit),
+			metric.WithDescription(instrument.Description),
+		)
+	case kindGauge:
+		entry.gauge, err = c.meter.Float64Gauge(name,
+			metric.WithUnit(instrument.Unit),
+			metric.WithDescription(instrument.Description),
+		)
+	default:
+		return nil, fmt.Errorf("metrics: unknown instrument kind %q", kind)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("metrics: create %s %q: %w", kind, name, err)
+	}
+
+	actual, loaded := c.instruments.LoadOrStore(name, entry)
+	if !loaded {
+		return entry, nil
+	}
+	existing, ok := actual.(*instrumentEntry)
+	if !ok {
+		return nil, fmt.Errorf("metrics: unexpected entry type %T for %q", actual, name)
+	}
+	if err := existing.matches(kind, instrument); err != nil {
+		return nil, err
+	}
+	return existing, nil
+}
+
+func (e *instrumentEntry) matches(kind instrumentKind, instrument Instrument) error {
+	if e.kind == kind && e.unit == instrument.Unit && e.description == instrument.Description {
+		return nil
+	}
+	return fmt.Errorf("%w: %q is already registered as %s (unit=%q, description=%q)",
+		ErrInstrumentConflict, instrument.Name, e.kind, e.unit, e.description)
+}
+
+func validateInstrument(instrument Instrument) (string, error) {
+	if !metricNamePattern.MatchString(instrument.Name) {
+		return "", fmt.Errorf("%w: %q", ErrInvalidMetricName, instrument.Name)
+	}
+	return instrument.Name, nil
 }
 
 func newInstrumentClient(provider metric.MeterProvider, scope string, shutdown func(context.Context) error) *otelMetrics {

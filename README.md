@@ -55,7 +55,7 @@ GitHub Actions workflows live in `.github/workflows/`:
   matrix job per module: `gofmt`, `golangci-lint` (config at repo root,
   `.golangci.yml`), `go vet`, `go test` (plus `-race`), and a
   `go mod tidy -diff` check. Every module is linted on the full tree and
-  checked by gostyle. gostyle also has its own test job.
+  checked by sdkcheck and otelcheck, which also have their own test job.
 - **`doc-contracts`** job in `ci.yml` runs
   `.github/scripts/check-doc-contracts.sh` and its tests: every public package
   must have a `doc.go` contract and a row in the import map.

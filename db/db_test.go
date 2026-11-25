@@ -144,9 +144,10 @@ var mockSeq atomic.Int64
 // mockDB is a registered sqlmock database: its DSN, the *sql.DB, and the
 // expectations embedded so tests call mock.ExpectQuery and friends directly.
 type mockDB struct {
+	sqlmock.Sqlmock
+
 	dsn string
 	db  *sql.DB
-	sqlmock.Sqlmock
 }
 
 // newMock registers a uniquely named sqlmock database with exact query matching

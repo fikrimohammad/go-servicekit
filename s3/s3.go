@@ -255,10 +255,11 @@ func endpointAddress(endpoint string) (string, int) {
 
 // client implements Client.
 type client struct {
+	meta
+
 	api     *s3.Client
 	tm      *transfermanager.Client
 	presign *s3.PresignClient
-	meta
 }
 
 var _ Client = (*client)(nil)
@@ -269,7 +270,6 @@ func (c *client) PutObject(ctx context.Context, params *s3.PutObjectInput, optFn
 }
 
 // GetObject retrieves an object as a stream using the S3 Transfer Manager.
-// gostyle:ignore getter-prefix S3's API names the operation GetObject.
 func (c *client) GetObject(ctx context.Context, input *transfermanager.GetObjectInput, opts ...func(*transfermanager.Options)) (*transfermanager.GetObjectOutput, error) {
 	return c.tm.GetObject(ctx, input, opts...)
 }

@@ -68,13 +68,17 @@ func writeProblem(c *app.RequestContext, status int, detail string, code int) {
 	id := requestIDOf(c)
 	c.Response.Header.Set(requestIDHeader, id)
 	// Marshal can't fail: every field is a string or an int.
-	body, _ := json.Marshal(problem{
+	body, err := json.Marshal(problem{
 		Title:     problemTitle(status),
 		Status:    status,
 		Detail:    detail,
 		Code:      code,
 		RequestID: id,
 	})
+	if err != nil {
+		c.Status(status)
+		return
+	}
 	c.Data(status, problemContentType, body)
 }
 

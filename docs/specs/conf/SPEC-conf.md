@@ -97,7 +97,8 @@ go vet ./...
 go test -count=1 -shuffle=on ./...
 go test -count=1 -race -shuffle=on ./...
 golangci-lint run ./...
-GOWORK=off go run ../.agents/skills/go-best-practices/scripts/gostyle.go ./...
+GOWORK=off go run ../.github/scripts/sdkcheck/sdkcheck.go ./...
+GOWORK=off go run ../.github/scripts/otelcheck/otelcheck.go ./...
 go mod tidy -diff
 GOWORK=off go doc -all .
 GOWORK=off go doc -all ./internal/core
@@ -599,7 +600,7 @@ Use `logs.Logger`, falling back to `logs.Default()`.
 
 ## Code Style
 
-Follow `go-best-practices` and the sibling modules.
+Follow the repository Go design rules in `AGENTS.md` and the sibling modules.
 
 ```go
 // FileConfig configures a file source. Both fields are required; there is no
@@ -732,7 +733,7 @@ type EtcdConfig struct {
 
 - [ ] `conf/` exists with `doc.go` and internal file/etcd providers; every
       Command passes; `confloader/` is deleted; `go.work` and `LAX_MODULES` are
-      updated; the strict lint and gostyle checks report zero findings.
+      updated; the strict lint, sdkcheck, and otelcheck checks report zero findings.
 - [ ] `FileConfig` requires both `Path` and `Format`; YAML, JSON, and TOML
       documents load, including `time.Duration`, `net.IP`, and
       `TextUnmarshaler` values; `FormatScalar` is rejected for files.

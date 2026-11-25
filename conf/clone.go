@@ -38,7 +38,11 @@ func cloneGetterValue[T any](v T) T {
 	if !rv.IsValid() {
 		return v
 	}
-	return cloneValue(rv, make(map[cloneVisit]reflect.Value)).Interface().(T)
+	out, ok := reflect.TypeAssert[T](cloneValue(rv, make(map[cloneVisit]reflect.Value)))
+	if !ok {
+		return v
+	}
+	return out
 }
 
 // cloneValue returns a deep copy of v. seen preserves shared references and
