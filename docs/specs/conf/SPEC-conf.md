@@ -372,9 +372,10 @@ public API; `Source` is the public seam.
   loader converts it to that type before storing. It may return nil only when
   the target can be nil. The loader rejects a mismatched result at boot and on
   every update.
-- `Event` carries one kind of change: `Err`, `Heartbeat`, `Reset`, `Deleted`,
-  or a put. If more than one is set, the loader applies them in that order. A
-  provider must not mutate an `Event` or its `Reset` map after sending it.
+- `Event` carries exactly one kind of change: `Err`, `Heartbeat`, `Reset`,
+  `Deleted`, or a put. If more than one is set, only the first in that order is
+  applied and the others are ignored. A provider must not mutate an `Event` or
+  its `Reset` map after sending it.
 - Providers never log values. They may return errors; the loader classifies
   them for telemetry.
 - The sentinels are the shared vocabulary: providers wrap connection failures

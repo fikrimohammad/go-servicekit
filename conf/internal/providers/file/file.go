@@ -122,11 +122,17 @@ func loadYAML(data []byte, keys []string) (map[string]string, int64, error) {
 		return nil, 0, fmt.Errorf("%w: cannot parse YAML document", core.ErrParse)
 	}
 	if !errors.Is(err, io.EOF) {
-		var extra yaml.Node
-		if err := dec.Decode(&extra); err == nil {
+		for {
+			var extra yaml.Node
+			if err := dec.Decode(&extra); errors.Is(err, io.EOF) {
+				break
+			} else if err != nil {
+				return nil, 0, fmt.Errorf("%w: cannot parse YAML document", core.ErrParse)
+			}
+			if emptyYAMLDocument(&extra) {
+				continue
+			}
 			return nil, 0, fmt.Errorf("%w: multiple YAML documents", core.ErrParse)
-		} else if !errors.Is(err, io.EOF) {
-			return nil, 0, fmt.Errorf("%w: cannot parse YAML document", core.ErrParse)
 		}
 	}
 
@@ -142,6 +148,22 @@ func loadYAML(data []byte, keys []string) (map[string]string, int64, error) {
 		return nil, 0, err
 	}
 	return values, 0, nil
+}
+
+// emptyYAMLDocument reports whether n is an empty document, as produced by a
+// trailing "---" separator.
+func emptyYAMLDocument(n *yaml.Node) bool {
+	if n.Kind != yaml.DocumentNode {
+		return false
+	}
+	if len(n.Content) == 0 {
+		return true
+	}
+	if len(n.Content) != 1 {
+		return false
+	}
+	child := n.Content[0]
+	return child.Kind == yaml.ScalarNode && child.Tag == "!!null" && child.Value == ""
 }
 
 func walkYAML(node *yaml.Node, path string, requested, prefixes map[string]struct{}, values map[string]string, unknown *[]string) error {

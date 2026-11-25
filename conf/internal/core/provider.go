@@ -40,10 +40,10 @@ type Formatter interface {
 	Parse(raw string, t reflect.Type) (any, error)
 }
 
-// Event is one change from a Watcher. A Watcher sends one kind of change per
-// event: Err, Heartbeat, Reset, Deleted, or a put. If more than one is set, the
-// loader applies them in that order. A Watcher must not mutate an Event or its
-// Reset map after sending it.
+// Event is one change from a Watcher. A Watcher must set exactly one kind of
+// change per event: Err, Heartbeat, Reset, Deleted, or a put. If more than one
+// is set, only the first in that order is applied and the others are ignored.
+// A Watcher must not mutate an Event or its Reset map after sending it.
 type Event struct {
 	// Key is the config key for a put or delete.
 	Key string

@@ -212,6 +212,15 @@ func TestLoadTrailingDocument(t *testing.T) {
 	}
 }
 
+func TestLoadTrailingEmptyYAMLDocument(t *testing.T) {
+	data := "checkouts:\n  ttl: 30s\n---\n"
+	values, _ := loadValues(t, core.FormatYAML, "app.yaml", data, []string{"checkouts/ttl"})
+
+	if got := strings.TrimSpace(values["checkouts/ttl"]); got != "30s" {
+		t.Errorf("checkouts/ttl = %q, want 30s", got)
+	}
+}
+
 func TestLoadScalarFormat(t *testing.T) {
 	p := New(Config{Path: "app.yaml", Format: core.FormatScalar})
 	if _, _, err := p.Load(context.Background(), nil); !errors.Is(err, core.ErrInvalidFormat) {

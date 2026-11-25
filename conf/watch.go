@@ -24,6 +24,7 @@ func (c *loaderCore) consume(ctx context.Context, ch <-chan confcore.Event) {
 	}
 }
 
+// apply applies the first set event kind; the remaining fields are ignored.
 func (c *loaderCore) apply(ctx context.Context, ev confcore.Event) {
 	switch {
 	case ev.Err != nil:

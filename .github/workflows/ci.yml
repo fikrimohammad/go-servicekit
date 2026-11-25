@@ -132,9 +132,9 @@ jobs:
     timeout-minutes: 10
     services:
       etcd:
-        image: quay.io/coreos/etcd:v3.7.1
+        image: gcr.io/etcd-development/etcd:v3.7.1
         env:
-          ETCD_ADVERTISE_CLIENT_URLS: http://0.0.0.0:2379
+          ETCD_ADVERTISE_CLIENT_URLS: http://127.0.0.1:2379
           ETCD_LISTEN_CLIENT_URLS: http://0.0.0.0:2379
         ports:
           - 2379:2379
@@ -160,19 +160,24 @@ jobs:
       - name: Run etcd integration tests
         run: |
           set -o pipefail
-          go test -count=1 -run '^TestEtcdIntegration' -v ./... \
+          go test -count=1 -race -timeout 5m -run '^TestEtcdIntegration' -v ./... \
             | tee "$RUNNER_TEMP/etcd-integration.log"
 
       - name: Assert integration tests passed, not skipped
         run: |
+          if [ ! -s "$RUNNER_TEMP/etcd-integration.log" ]; then
+            echo "::error::integration test log is missing or empty"
+            exit 1
+          fi
           if grep -qE '^[[:space:]]*--- SKIP:' "$RUNNER_TEMP/etcd-integration.log"; then
             echo "::error::an integration test or subtest was skipped"
             exit 1
           fi
           # TestEtcdIntegration runs in conf and internal/providers/etcd.
           count=$(grep -cE '^--- PASS: TestEtcdIntegration \(' "$RUNNER_TEMP/etcd-integration.log" || true)
+          count=${count:-0}
           if [ "$count" -lt 2 ]; then
-            echo "::error::TestEtcdIntegration did not pass in every package; it may have been skipped or removed"
+            echo "::error::expected TestEtcdIntegration in 2 packages, found ${count}; it may have been skipped or removed"
             exit 1
           fi
           for test in TestEtcdIntegrationCompaction TestEtcdIntegrationCloseStopsWatch; do
