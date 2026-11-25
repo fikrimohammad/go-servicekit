@@ -136,6 +136,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     services:
+      # The upstream etcd image is distroless, so Docker's shell-form
+      # healthcheck cannot run; the step below polls the HTTP health endpoint.
       etcd:
         image: gcr.io/etcd-development/etcd:v3.7.1
         env:
@@ -143,11 +145,6 @@ jobs:
           ETCD_LISTEN_CLIENT_URLS: http://0.0.0.0:2379
         ports:
           - 2379:2379
-        options: >-
-          --health-cmd "etcdctl --endpoints=http://127.0.0.1:2379 endpoint health"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 30
     env:
       CONF_ETCD_ENDPOINT: 127.0.0.1:2379
     defaults:
@@ -161,6 +158,17 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
           cache-dependency-path: conf/go.sum
+
+      - name: Wait for etcd
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:2379/health >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::etcd did not become ready"
+          exit 1
 
       - name: Run etcd integration tests
         run: |
