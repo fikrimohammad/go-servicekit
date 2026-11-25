@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/fikrimohammad/go-servicekit/conf"
-	"github.com/fikrimohammad/go-servicekit/conf/providers/etcd"
+	"github.com/fikrimohammad/go-servicekit/conf/internal/core"
+	"github.com/fikrimohammad/go-servicekit/conf/internal/providers/etcd"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
@@ -28,7 +28,7 @@ func TestEtcdIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("clientv3.New: %v", err)
 	}
-	defer cli.Close()
+	defer func() { _ = cli.Close() }()
 
 	ns := fmt.Sprintf("conf-test-%d", time.Now().UnixNano())
 	defer func() {
@@ -57,7 +57,7 @@ func TestEtcdIntegration(t *testing.T) {
 	}
 
 	watchCtx, watchCancel := context.WithCancel(ctx)
-	defer p.Close()
+	defer func() { _ = p.Close() }()
 	defer watchCancel()
 
 	events, err := p.Watch(watchCtx, rev)
@@ -66,7 +66,7 @@ func TestEtcdIntegration(t *testing.T) {
 	}
 
 	put("toggle_switch", "false")
-	ev := awaitEvent(t, events, func(ev conf.Event) bool {
+	ev := awaitEvent(t, events, func(ev core.Event) bool {
 		return ev.Key == "toggle_switch" && !ev.Deleted && ev.Value == "false"
 	})
 	if ev.Revision == 0 {
@@ -76,7 +76,7 @@ func TestEtcdIntegration(t *testing.T) {
 	if _, err := cli.Delete(ctx, ns+"/toggle_switch"); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
-	awaitEvent(t, events, func(ev conf.Event) bool {
+	awaitEvent(t, events, func(ev core.Event) bool {
 		return ev.Key == "toggle_switch" && ev.Deleted
 	})
 }
@@ -97,7 +97,7 @@ func TestEtcdIntegrationCompaction(t *testing.T) {
 	if err != nil {
 		t.Fatalf("clientv3.New: %v", err)
 	}
-	defer cli.Close()
+	defer func() { _ = cli.Close() }()
 
 	ns := fmt.Sprintf("conf-test-compact-%d", time.Now().UnixNano())
 	defer func() {
@@ -129,7 +129,7 @@ func TestEtcdIntegrationCompaction(t *testing.T) {
 	}
 
 	watchCtx, watchCancel := context.WithCancel(ctx)
-	defer p.Close()
+	defer func() { _ = p.Close() }()
 	defer watchCancel()
 
 	events, err := p.Watch(watchCtx, rev)
@@ -137,7 +137,7 @@ func TestEtcdIntegrationCompaction(t *testing.T) {
 		t.Fatalf("Watch: %v", err)
 	}
 
-	ev := awaitEvent(t, events, func(ev conf.Event) bool { return ev.Reset != nil })
+	ev := awaitEvent(t, events, func(ev core.Event) bool { return ev.Reset != nil })
 	if got := ev.Reset["toggle_switch"]; got != "false" {
 		t.Errorf("reset toggle_switch = %q, want false", got)
 	}
@@ -146,7 +146,74 @@ func TestEtcdIntegrationCompaction(t *testing.T) {
 	}
 }
 
-func awaitEvent(t *testing.T, ch <-chan conf.Event, match func(conf.Event) bool) conf.Event {
+func TestEtcdIntegrationCloseStopsWatch(t *testing.T) {
+	endpoint := os.Getenv("CONF_ETCD_ENDPOINT")
+	if endpoint == "" {
+		t.Skip("CONF_ETCD_ENDPOINT is not set")
+	}
+
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+
+	cli, err := clientv3.New(clientv3.Config{
+		Endpoints:   []string{endpoint},
+		DialTimeout: 5 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("clientv3.New: %v", err)
+	}
+	defer func() { _ = cli.Close() }()
+
+	ns := fmt.Sprintf("conf-test-close-%d", time.Now().UnixNano())
+	defer func() {
+		_, _ = cli.Delete(context.WithoutCancel(t.Context()), ns+"/", clientv3.WithPrefix())
+	}()
+
+	if _, err := cli.Put(ctx, ns+"/toggle_switch", "true"); err != nil {
+		t.Fatalf("Put(toggle_switch): %v", err)
+	}
+
+	p := etcd.New(etcd.Config{Endpoint: endpoint, Namespace: ns})
+	_, rev, err := p.Load(ctx, []string{"toggle_switch"})
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	// The Watch context is never canceled by the test: Close alone must stop
+	// the watch, otherwise the provider leaks and Close blocks forever.
+	events, err := p.Watch(context.WithoutCancel(t.Context()), rev)
+	if err != nil {
+		t.Fatalf("Watch: %v", err)
+	}
+
+	closed := make(chan error, 1)
+	go func() { closed <- p.Close() }()
+	select {
+	case err := <-closed:
+		if err != nil {
+			t.Errorf("Close() error = %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Close() did not stop the watch")
+	}
+
+	drained := make(chan struct{})
+	go func() {
+		for {
+			if _, ok := <-events; !ok {
+				break
+			}
+		}
+		close(drained)
+	}()
+	select {
+	case <-drained:
+	case <-time.After(5 * time.Second):
+		t.Fatal("watch channel did not close")
+	}
+}
+
+func awaitEvent(t *testing.T, ch <-chan core.Event, match func(core.Event) bool) core.Event {
 	t.Helper()
 	timer := time.NewTimer(5 * time.Second)
 	defer timer.Stop()

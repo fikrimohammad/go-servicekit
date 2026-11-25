@@ -128,10 +128,14 @@ DB_MYSQL_DSN='app:secret@tcp(127.0.0.1:3306)/report_db' \
 
 DB_POSTGRES_DSN='postgres://app:secret@127.0.0.1:5432/report_db?sslmode=disable' \
   go test -run TestPostgresIntegration ./...
+
+cd conf && CONF_ETCD_ENDPOINT=127.0.0.1:2379 \
+  go test -run Integration ./...
 ```
 
-CI runs the MySQL and PostgreSQL integration tests in the `db-integration` job,
-against service containers, and fails if either one is skipped.
+CI runs the MySQL and PostgreSQL integration tests in the `db-integration` job
+and the etcd integration tests in the `etcd-integration` job, against service
+containers, and fails if any one is skipped.
 
 ## Releasing
 

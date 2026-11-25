@@ -14,21 +14,21 @@ set is always visible?
 ## Recommended Direction
 
 A new strict module, `conf`, replacing `confloader`. One loader binds one
-provider, and providers live next to the loader:
+source, and the file and etcd providers live inside the module:
 
 ```text
 conf/
   conf.go             New, Loader, Getter, State, errors, telemetry
-  providers/file/     strict document loader, owns one format
-  providers/etcd/     boot Get, watch, resync, per-key formats
+  internal/providers/file/     strict document loader, owns one format
+  internal/providers/etcd/     boot Get, watch, resync, per-key formats
 ```
 
 ```go
-boot, err := conf.New[Boot](ctx, file.New(file.Config{
+boot, err := conf.New[Boot](ctx, conf.File(conf.FileConfig{
 	Path:   "disburseapp.prod.yaml",
 	Format: conf.FormatYAML,
 }))
-hot, err := conf.New[Hot](ctx, etcd.New(etcd.Config{
+hot, err := conf.New[Hot](ctx, conf.Etcd(conf.EtcdConfig{
 	Endpoint:  os.Getenv("ETCD_ENDPOINT"),
 	Namespace: "disburseapp",
 }))
@@ -61,9 +61,9 @@ in one store, and one loader sees one store.
 A raw string is ambiguous: `true` is a YAML bool, a JSON string if quoted, and
 a TOML boolean. The format is therefore explicit.
 
-- **File:** `file.Config.Format` is required and owns the whole document. The
-  file provider implements the optional `Formatter` capability
-  (`Format() conf.Format`), returns every leaf in that format, and the loader
+- **File:** `FileConfig.Format` is required and owns the whole document. The
+  internal file provider implements the internal `Formatter` capability
+  (`Parse(raw, type)`), returns every leaf in that format, and the loader
   parses with it. A `format` tag on a file leaf is an error. There is no
   extension detection and no default.
 - **Etcd:** the provider does not implement `Formatter`; every leaf must carry
@@ -140,7 +140,7 @@ type Hot struct {
 	KillSwitch conf.Getter[bool] `conf:"name=toggle_switch,format=scalar"`
 }
 
-loader, err := conf.New[Hot](ctx, etcd.New(etcd.Config{
+loader, err := conf.New[Hot](ctx, conf.Etcd(conf.EtcdConfig{
 	Endpoint:  os.Getenv("ETCD_ENDPOINT"),
 	Username:  os.Getenv("ETCD_USERNAME"),
 	Password:  os.Getenv("ETCD_PASSWORD"),
@@ -162,8 +162,8 @@ Derived keys: `checkouts/ttl`, `checkouts/max_retry`, `toggle_switch`.
 
 | Decision | Why |
 | --- | --- |
-| One loader, one provider | A key lives in one place; a loader that sees two stores re-invents merge and precedence. |
-| Providers under `providers/` | File and etcd storage code stays out of the loader; a new backend adds a package and changes nothing in the core. |
+| One loader, one source | A key lives in one place; a loader that sees two stores re-invents merge and precedence. |
+| Providers inside `internal/providers/` | File and etcd storage code stays out of the loader and out of the public API; a new backend adds an internal package and a `Source` constructor. |
 | Every leaf a `Getter[T]` | File and hot config share one access shape: `Get` / `GetWithDefault`. |
 | Derived snake_case path, per-segment rename | Nested structs carry the grouping, so field names stay short; `folder=` and `name=` rename one segment each, and `conf:"-"` is the only other tag. |
 | `Formatter` for files, `format=` for etcd | A file is one document with one format; an etcd key is an independent value with its own format. |
@@ -203,13 +203,14 @@ Derived keys: `checkouts/ttl`, `checkouts/max_retry`, `toggle_switch`.
 
 ## MVP Scope
 
-1. `conf`: `New[T](ctx, provider, opts...)`, `Getter[T]`, `Get`,
-   `GetWithDefault`, `Data`, `State`, `Close`, `Provider`, `Watcher`,
-   `Formatter`.
-2. `providers/file`: `Config{Path, Format}`, `Formatter`, raw source values,
-   strict missing/unknown keys, no watch.
-3. `providers/etcd`: boot prefix `Get`, watch from revision, progress notify,
-   compaction resync, reconnect backoff, per-key last-good, per-key formats.
+1. `conf`: `New[T](ctx, source, opts...)`, `Getter[T]`, `Get`,
+   `GetWithDefault`, `Data`, `State`, `Close`, `FileConfig`, `EtcdConfig`,
+   `Source`, `File`, `Etcd`.
+2. `internal/providers/file`: `Config{Path, Format}`, internal `Formatter`, raw
+   source values, strict missing/unknown keys, no watch.
+3. `internal/providers/etcd`: boot prefix `Get`, watch from revision, progress
+   notify, compaction resync, reconnect backoff, per-key last-good, per-key
+   formats.
 4. Key derivation with per-segment `conf:"folder=..."` (struct),
    `conf:"name=..."` and `conf:"format=..."` (leaf), `conf:"-"` opt-out for
    non-`Getter` fields, an init error for `conf:"-"` on a `Getter`, and
@@ -243,9 +244,9 @@ Derived keys: `checkouts/ttl`, `checkouts/max_retry`, `toggle_switch`.
 - **Cross-source merge / precedence** — a key lives in exactly one store.
 - **Multiple sources per loader** — one loader, one store; compose in the app.
 - **Automatic format detection** — ambiguous for raw values; formats are
-  declared in `file.Config` or the leaf tag.
-- **A third-party provider ecosystem** — the provider interfaces are public
-  because the providers are subpackages, not a compatibility promise.
+  declared in `FileConfig` or the leaf tag.
+- **A third-party provider ecosystem** — the provider interfaces are internal;
+  `Source` is the public seam, not a compatibility promise.
 - **Absolute or multi-segment overrides** — per-segment renames compose to any
   path; an absolute override would let a key contradict the struct shape.
 - **Optional-key tags** — create the key before deploying; an optional tag

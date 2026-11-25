@@ -7,16 +7,16 @@ Module id: `conf`. Status: draft for review.
 These are the choices the idea doc left open. Correct any of them before
 approval:
 
-1. **Package name `conf`.** Module `github.com/fikrimohammad/go-servicekit/conf`,
-   providers under `conf/providers/file` and `conf/providers/etcd`. If
-   verbosity matters more than brevity, `configuration` is the alternative, but
-   every call site gets longer.
-2. **The provider contract is public** (`conf.Provider`, `conf.Watcher`,
-   `conf.Formatter`, `conf.Event`) because the providers are separate packages.
-   It is a seam for the in-module providers, not a promise of a third-party
-   plugin ecosystem.
-3. **`etcd.Config` lives in `providers/etcd`** and uses a single `Endpoint`
-   plus optional `*tls.Config`. Multi-endpoint etcd is out of scope.
+1. **Package name `conf`.** Module `github.com/fikrimohammad/go-servicekit/conf`;
+   provider implementations live under `conf/internal/providers`. Users choose
+   a source through `conf.File` or `conf.Etcd`. If verbosity matters more than
+   brevity, `configuration` is the alternative, but every call site gets
+   longer.
+2. **The provider contract is internal** (`internal/core.Provider`,
+   `Watcher`, `Formatter`, and `Event`). `Source` is the public seam; there is
+   no third-party provider ecosystem and no standalone provider API.
+3. **`EtcdConfig` lives in the root `conf` package** and uses a single
+   `Endpoint` plus optional `*tls.Config`. Multi-endpoint etcd is out of scope.
 4. **Telemetry uses the `conf.` namespace:** `conf.reload.duration`,
    `conf.reload.count`, `conf.last_success.timestamp`; spans `conf.load` and
    `conf.reload`.
@@ -27,15 +27,14 @@ approval:
 7. **TOML is in scope** because you asked. It adds
    `github.com/pelletier/go-toml/v2`. If TOML is not actually required, drop it
    and keep YAML/JSON only.
-8. **Formats are declared, never guessed.** `file.Config.Format` is required
-   and owns the whole document. Etcd values require a `format=` tag on every
-   leaf; there is no default.
+8. **Formats are declared, never guessed.** `FileConfig.Format` is required and
+   owns the whole document. Etcd values require a `format=` tag on every leaf;
+   there is no default.
 9. **The file provider preserves the source format and owns its parsing.** It
-   implements the optional `Formatter` capability with `Parse(raw, type)`,
-   decodes each leaf with `file.Config.Format`, and returns raw source-format
-   values. There is no normalization to YAML, so format-specific unmarshalers
-   keep working, and TOML scalars/arrays decode through a synthetic single-key
-   document.
+   implements the internal `Formatter` capability with `Parse(raw, type)`,
+   decodes each leaf with `Format`, and returns raw source-format values. There
+   is no normalization to YAML, so format-specific unmarshalers keep working,
+   and TOML scalars/arrays decode through a synthetic single-key document.
 
 ## Objective
 
@@ -69,16 +68,16 @@ always a complete value; `State()` and OTel expose the truth.
   `UnmarshalTOML` keeps its custom behavior when its file is loaded.
 - As a developer, renaming a field fails the golden-key test instead of
   silently reading the wrong key.
-- As a maintainer, a new storage backend adds a `providers/<name>` package and
-  changes nothing in the loader.
+- As a maintainer, a new storage backend adds an internal provider and a
+  `Source` constructor and changes nothing in the loader.
 
 ## Tech Stack
 
 - Go 1.26.5 (from `go.work`); module
   `github.com/fikrimohammad/go-servicekit/conf`.
-- `go.etcd.io/etcd/client/v3` v3.7.1 (`providers/etcd` only).
-- `gopkg.in/yaml.v3` v3.0.1 in the root (value decoding) and in
-  `providers/file` (document walking).
+- `go.etcd.io/etcd/client/v3` v3.7.1 (`internal/providers/etcd` only).
+- `gopkg.in/yaml.v3` v3.0.1 in `internal/core` (value decoding) and in
+  `internal/providers/file` (document walking).
 - `github.com/pelletier/go-toml/v2` v2.x for TOML values and files.
 - `github.com/fikrimohammad/go-servicekit/observability` (`metrics.Client`,
   `tracer.Client`, `logs.Logger`), with local `replace` directives like the
@@ -98,11 +97,13 @@ go vet ./...
 go test -count=1 -shuffle=on ./...
 go test -count=1 -race -shuffle=on ./...
 golangci-lint run ./...
-GOWORK=off go run ../.agents/skills/go-best-practices/scripts/gostyle.go ./...
+GOWORK=off go run ../.github/scripts/sdkcheck/sdkcheck.go ./...
+GOWORK=off go run ../.github/scripts/otelcheck/otelcheck.go ./...
 go mod tidy -diff
 GOWORK=off go doc -all .
-GOWORK=off go doc -all ./providers/file
-GOWORK=off go doc -all ./providers/etcd
+GOWORK=off go doc -all ./internal/core
+GOWORK=off go doc -all ./internal/providers/file
+GOWORK=off go doc -all ./internal/providers/etcd
 ```
 
 Integration:
@@ -116,47 +117,51 @@ CONF_ETCD_ENDPOINT=127.0.0.1:2379 go test -count=1 -run 'Integration' ./...
 ```text
 conf/
   go.mod                       module github.com/fikrimohammad/go-servicekit/conf
-  README.md                    quickstart; links to doc.go and the providers
+  README.md                    quickstart; links to doc.go
   doc.go                       package overview in the house format (see below)
-  conf.go                      Option, New, Loader, Data, State, Close, and the
-                               Provider, Watcher, Formatter, and getterLeaf
-                               interfaces
+  conf.go                      Option, New, Loader, Data, State, Close, getterLeaf
   conf_test.go
+  config.go                    FileConfig, EtcdConfig, SetDefaults, Validate
+  config_test.go
+  source.go                    Source, File, Etcd, internal provider wiring
+  source_test.go
   getter.go                    Getter[T], Get, GetWithDefault, bind
   getter_test.go
+  clone.go                     copy-on-read for reference values
+  clone_test.go
   key.go                       key derivation, tag parsing, snake_case,
                                collision detection, format policy
   key_test.go
-  provider.go                  Event
-  provider_test.go
-  format.go                    Format, constants, validation, parsing
-  format_test.go
+  format.go                    public Format alias and constants
   state.go                     State, constants, String
   state_test.go
-  errors.go                    exported sentinels
+  errors.go                    public sentinel aliases
   telemetry.go                 metric descriptors, span and log helpers
   telemetry_test.go
   helpers_test.go              fixture structs, fake provider, recording clients
   example_test.go              runnable file example; compile-only etcd example
-  integration_test.go          loader end-to-end through the etcd provider
+  integration_test.go          loader end-to-end through conf.Etcd
   testdata/                    sample YAML/JSON/TOML and golden key sets
-  providers/
-    file/
-      doc.go                   package overview in the house format
-      config.go                Config, SetDefaults, Validate
-      config_test.go
-      file.go                  Provider, New, Load, Format, Source, Close
-      file_test.go
-      example_test.go
-      testdata/
-    etcd/
-      doc.go                   package overview in the house format
-      etcd.go                  Provider, New, Load, Watch, Source, Close
-      etcd_test.go
-      config.go                Config, SetDefaults, Validate
-      config_test.go
-      example_test.go
-      integration_test.go      Load and Watch against a real etcd
+  internal/
+    core/
+      core.go                  package comment; internal only
+      provider.go              Provider, Watcher, Formatter, Event
+      format.go                Format, constants, validation, parsing
+      format_test.go
+      errors.go                sentinels
+    providers/
+      file/
+        doc.go
+        config.go              internal Config
+        file.go                Provider, New, Load, Parse, Source, Close
+        file_test.go
+        testdata/
+      etcd/
+        doc.go
+        config.go              internal Config
+        etcd.go                Provider, New, Load, Watch, Source, Close
+        etcd_test.go
+        integration_test.go    Load and Watch against a real etcd
 ```
 
 Changes outside `conf/`:
@@ -176,12 +181,13 @@ Changes outside `conf/`:
 
 - `Package conf ...` one-line summary.
 - `# When to use` — one loader per store; boot vs hot; no secrets; no env layer.
-- `# Import` — the root and both provider import paths.
-- `# Minimal example` — a file loader and an etcd loader.
+- `# Import` — the conf import path.
+- `# Minimal example` — `conf.File` and `conf.Etcd` loaders.
 - `# Key derivation` — the snake_case path, `folder=`, `name=`, `format=`,
   `conf:"-"`, and the `checkouts/ttl` example.
-- `# Formats` — the file config owns one document format via `Formatter.Parse`;
-  every etcd leaf declares its format; there is no default and no sniffing.
+- `# Formats` — the file source owns one document format via the internal
+  `Formatter.Parse`; every etcd leaf declares its format; there is no default
+  and no sniffing.
 - `# Lifecycle` — `New` loads strictly, starts the watch, `State` reports
   health, `Close` invalidates the loader.
 - `# Common mistakes` — `conf:"-"` on a `Getter`; a missing boot key; a missing
@@ -190,8 +196,8 @@ Changes outside `conf/`:
 - `# Test recipe` — a temp file for the file provider; a fake provider for
   loader tests; `CONF_ETCD_ENDPOINT` for integration.
 
-`providers/file/doc.go` and `providers/etcd/doc.go` use the same sections for
-their storage model, formats, import path, example, lifecycle, and mistakes.
+`internal/providers/file/doc.go` and `internal/providers/etcd/doc.go` are
+internal package comments; they are not public API docs.
 
 ## Public API
 
@@ -222,60 +228,44 @@ func WithMetrics(m metrics.Client) Option
 func WithTracer(t tracer.Client) Option
 func WithLogger(l logs.Logger) Option
 
-// Provider is the storage contract. A Loader binds one Provider.
-type Provider interface {
-	// Source returns a stable, low-cardinality telemetry label: "file" or
-	// "etcd" for the built-in providers.
-	Source() string
-	// Load returns the raw value for each requested key. Missing keys are
-	// absent from the map. rev is opaque to the Loader and is passed back to
-	// Watch. Load is called once per Loader.
-	Load(ctx context.Context, keys []string) (map[string]string, int64, error)
-	// Close releases resources. It is idempotent and safe before a successful
-	// Load.
-	Close() error
+// FileConfig configures a file source. Both fields are required.
+type FileConfig struct {
+	Path   string
+	Format Format
 }
+func (c FileConfig) SetDefaults() FileConfig
+func (c FileConfig) Validate() error
 
-// Watcher is a Provider that streams changes.
-type Watcher interface {
-	// Watch streams changes after rev. The channel closes only when ctx is
-	// done. The provider owns reconnect and resync.
-	Watch(ctx context.Context, rev int64) (<-chan Event, error)
+// EtcdConfig configures an etcd source. The value format is not here: every
+// leaf declares its own format.
+type EtcdConfig struct {
+	Endpoint    string
+	Username    string
+	Password    string
+	Namespace   string
+	DialTimeout time.Duration
+	TLS         *tls.Config
 }
+func (c EtcdConfig) SetDefaults() EtcdConfig
+func (c EtcdConfig) Validate() error
 
-// Formatter is a Provider that owns parsing for its values. The loader calls
-// Parse for every Load result and rejects per-leaf format tags. The file
-// provider implements it; the etcd provider does not.
-type Formatter interface {
-	// Parse decodes raw into a value of type t.
-	Parse(raw string, t reflect.Type) (any, error)
-}
+// Source describes one storage backend. Create it with File or Etcd.
+type Source struct{ /* unexported */ }
 
-// Event is one change from a Watcher.
-type Event struct {
-	// Key is the config key for a put or delete.
-	Key string
-	// Value is the raw value for a put.
-	Value string
-	// Deleted reports that Key is gone.
-	Deleted bool
-	// Reset, when non-nil, replaces the whole snapshot after a resync.
-	Reset map[string]string
-	// Revision is the store revision, or zero if unknown.
-	Revision int64
-	// Heartbeat reports that the watch is alive with no value change.
-	Heartbeat bool
-	// Err reports that the watch is degraded. It carries no value change.
-	Err error
-}
+func File(cfg FileConfig) Source
+func Etcd(cfg EtcdConfig) Source
 
-// New builds a Loader for T, loads the provider, and starts the watch when the
-// provider supports one. T must be a struct whose leaves are Getter fields.
-func New[T any](ctx context.Context, p Provider, opts ...Option) (*Loader[T], error)
+// New builds a Loader for T, loads the source, and starts the watch when the
+// source supports one. T must be a struct whose leaves are Getter fields.
+// New takes ownership of the provider created by source. Canceling ctx stops
+// the boot load but not the watch; Loader.Close stops the watch and closes the
+// provider.
+func New[T any](ctx context.Context, source Source, opts ...Option) (*Loader[T], error)
 
 type Loader[T any] struct{ /* ... */ }
 
-// Data returns the config struct with every Getter bound.
+// Data returns the config struct with every Getter bound. Each call returns a
+// copy whose Getters read the loader's current snapshot.
 func (l *Loader[T]) Data() T
 
 // State reports the loader's health and lifecycle state.
@@ -285,12 +275,9 @@ func (l *Loader[T]) State() State
 // Close, reads return ErrClosed and State returns StateClosed.
 func (l *Loader[T]) Close() error
 
-// Getter is a typed accessor for one config key.
-type Getter[T any] struct {
-	// Core returns the current raw value; it is set by the loader and is
-	// opaque to callers. Use Get or GetWithDefault.
-	Core func() (any, error)
-}
+// Getter is a typed accessor for one config key, created and bound only by a
+// Loader. It has no exported fields, and its zero value is unbound.
+type Getter[T any] struct{ /* unexported */ }
 
 func (g Getter[T]) Get() (T, error)
 func (g Getter[T]) GetWithDefault(def T) T
@@ -304,73 +291,54 @@ const (
 )
 ```
 
-### Providers
+### Sources
+
+The provider implementations live in `internal/providers` and are not public
+API. Callers choose one through `Source`:
 
 ```go
-// package providers/file
-
-// Config configures the file provider. Both fields are required.
-type Config struct {
-	// Path is the config file path.
-	Path string
-	// Format is the document format: YAML, JSON, or TOML. Required.
-	Format conf.Format
-}
-func (c Config) SetDefaults() Config
-func (c Config) Validate() error
-
-func New(cfg Config) *Provider
-
-type Provider struct{ /* ... */ }
-func (p *Provider) Source() string                                  // "file"
-func (p *Provider) Parse(raw string, t reflect.Type) (any, error)   // conf.Formatter
-func (p *Provider) Load(ctx context.Context, keys []string) (map[string]string, int64, error)
-func (p *Provider) Close() error
-
-// package providers/etcd
-
-// Config configures the etcd provider. The value format is not here: every
-// leaf declares its own format.
-type Config struct {
-	Endpoint    string
-	Username    string
-	Password    string
-	Namespace   string
-	DialTimeout time.Duration
-	TLS         *tls.Config
-}
-func (c Config) SetDefaults() Config
-func (c Config) Validate() error
-
-func New(cfg Config) *Provider
-
-type Provider struct{ /* ... */ }
-func (p *Provider) Source() string        // "etcd"
-func (p *Provider) Load(ctx context.Context, keys []string) (map[string]string, int64, error)
-func (p *Provider) Watch(ctx context.Context, rev int64) (<-chan conf.Event, error)
-func (p *Provider) Close() error
+loader, err := conf.New[Boot](ctx, conf.File(conf.FileConfig{
+	Path:   "app.yaml",
+	Format: conf.FormatYAML,
+}))
+loader, err := conf.New[Hot](ctx, conf.Etcd(conf.EtcdConfig{
+	Endpoint:  "127.0.0.1:2379",
+	Namespace: "disburseapp",
+}))
 ```
+
+`File` and `Etcd` validate their config immediately and store the error in the
+returned `Source`; `New` reports it. A `Source` creates a fresh provider for
+each `New`, so one `Source` can be used for more than one Loader.
 
 Behaviour:
 
-- `New` requires a non-nil `Provider`. A nil provider is `ErrInvalidConfig`.
+- `New` requires a usable `Source`; a zero `Source` or an invalid config is
+  `ErrInvalidConfig` or the config's own sentinel.
+- `New` creates the provider from `source` and takes ownership of it: it
+  closes the provider on every error path, and `Loader.Close` closes it on
+  success. Canceling the `ctx` passed to `New` stops the boot load but not the
+  watch; only `Close` stops the watch.
 - `New` derives the keys, calls `Load` once, checks that every derived key is
   present, parses every value, and binds the `Getter` fields.
-- **Format policy:** if the provider implements `Formatter`, the loader calls
-  `Parse` for every value and a leaf `format` tag is `ErrInvalidTag`. If it
-  does not, every leaf must carry `conf:"format=..."`; a missing tag is
-  `ErrMissingFormat`; an unknown value is `ErrInvalidFormat`. There is no
-  default either way.
-- If the provider implements `Watcher`, `New` calls `Watch` with the load
-  revision. A watch that cannot start fails `New`; a transient disconnect after
-  startup is reported as an `Event.Err` and does not fail the loader.
+- **Format policy:** the internal file provider implements the internal
+  `Formatter` interface, so the loader calls `Parse` for every value and a leaf
+  `format` tag is `ErrInvalidTag`. The internal etcd provider does not, so every
+  leaf must carry `conf:"format=..."`; a missing tag is `ErrMissingFormat`; an
+  unknown value is `ErrInvalidFormat`. There is no default either way.
+- The internal etcd provider implements the internal `Watcher` interface; `New`
+  calls `Watch` with the load revision. A watch that cannot start fails `New`;
+  a transient disconnect after startup is reported as an internal `Event.Err`
+  and does not fail the loader.
 - `Data` is safe for concurrent use; the struct and its `Getter` fields are
-  immutable after `New`.
-- A zero `Getter` (nil `Core`) returns `ErrUnbound` from `Get` and `def` from
+  immutable after `New`. A Getter cannot be rebound from another package.
+- A zero `Getter` returns `ErrUnbound` from `Get` and `def` from
   `GetWithDefault`. The loader never produces one.
 - `Get` returns `ErrNotSet` for a deleted or absent key and `ErrClosed` after
   `Close`. It never returns a parse error: bad values never enter a snapshot.
-- `GetWithDefault` returns `def` on `ErrNotSet`, `ErrClosed`, or `ErrUnbound`.
+  It deep-copies reference values, so callers may mutate the result.
+- `GetWithDefault` returns `def` on `ErrNotSet`, `ErrClosed`, `ErrUnbound`, or
+  a wrong stored type, and otherwise returns the same deep copy as `Get`.
 - Exported errors: `ErrNotSet`, `ErrClosed`, `ErrUnbound`, `ErrInvalidConfig`,
   `ErrInvalidTag`, `ErrInvalidType`, `ErrDuplicateKey`, `ErrMissingKey`,
   `ErrUnknownKey`, `ErrParse`, `ErrConnect`, `ErrInvalidFormat`,
@@ -378,8 +346,9 @@ Behaviour:
 
 ## Provider Contract
 
-The loader and the providers meet at four types: `Provider`, `Watcher`,
-`Formatter`, and `Event`.
+The loader and the internal providers meet at four types defined in
+`internal/core`: `Provider`, `Watcher`, `Formatter`, and `Event`. They are not
+public API; `Source` is the public seam.
 
 - `Load(ctx, keys)` returns raw strings. A provider that implements
   `Formatter` owns their decoding; otherwise the loader decodes with the leaf's
@@ -390,6 +359,9 @@ The loader and the providers meet at four types: `Provider`, `Watcher`,
 - `rev` is opaque. The file provider returns 0 and does not implement
   `Watcher`; the etcd provider returns the header revision and continues from
   it.
+- `Watch` is called at most once, after `Load`, and must return promptly. The
+  loader detaches its context from the boot context so the watch survives
+  `New`'s context; `Close` cancels it.
 - **Format policy:** `Formatter` is the parsing-ownership signal.
   - The provider implements `Formatter` → it owns decoding for every value;
     the loader calls `Parse` and a leaf `format` tag is `ErrInvalidTag`. The
@@ -397,21 +369,30 @@ The loader and the providers meet at four types: `Provider`, `Watcher`,
   - The provider does not implement `Formatter` → every leaf must carry
     `format=`, and the loader decodes with it. The etcd provider is this case.
   No `Source()` value influences behavior; `Source()` is telemetry only.
+- `Formatter.Parse` must return a value assignable to the requested type; the
+  loader converts it to that type before storing. It may return nil only when
+  the target can be nil. The loader rejects a mismatched result at boot and on
+  every update.
+- `Event` carries exactly one kind of change: `Err`, `Heartbeat`, `Reset`,
+  `Deleted`, or a put. If more than one is set, only the first in that order is
+  applied and the others are ignored. A provider must not mutate an `Event` or
+  its `Reset` map after sending it.
 - Providers never log values. They may return errors; the loader classifies
   them for telemetry.
-- The root's sentinels are the shared vocabulary: providers wrap connection
-  failures with `conf.ErrConnect`, read failures and bad config with
-  `conf.ErrInvalidConfig`, and the file provider returns `conf.ErrUnknownKey`
-  for extra nodes.
+- The sentinels are the shared vocabulary: providers wrap connection failures
+  with `ErrConnect`, read failures with `ErrInvalidConfig`, and the file
+  provider returns `ErrUnknownKey` for extra nodes.
 
-### `providers/file`
+### `internal/providers/file`
 
-- `New(cfg)` stores `Config{Path, Format}`. `Load` validates both fields, reads
-  the file once, and parses it with `Format`.
+- `New(cfg)` stores `Config{Path, Format}`. The public `FileConfig.Validate`
+  checks both fields before the provider is created; `Load` reads the file once
+  and parses it with `Format`.
 - One file is one document. Decode it with `Format`, walk it by the requested
   key paths, and return each leaf as raw bytes in `Format`. JSON numbers are
   preserved as JSON, YAML nodes as YAML, TOML tables and date types as TOML.
-  There is no normalization to YAML.
+  A second JSON value or YAML document is `ErrParse`. There is no
+  normalization to YAML.
 - A requested path that is absent is left out of the map; the loader reports
   `ErrMissingKey`.
 - A node not consumed by a requested path is `ErrUnknownKey`, joined across all
@@ -423,10 +404,11 @@ The loader and the providers meet at four types: `Provider`, `Watcher`,
   single-key document for a scalar or array leaf. `Source()` returns `"file"`;
   `Close()` is a no-op. No watch.
 
-### `providers/etcd`
+### `internal/providers/etcd`
 
-- `New(cfg)` stores the config; `Load` validates it, opens one `clientv3`
-  client, and performs one prefix `Get`.
+- `New(cfg)` stores the config; the public `EtcdConfig.Validate` checks it
+  before the provider is created. `Load` opens one `clientv3` client and
+  performs one prefix `Get`.
 - Keys are `<namespace>/<key>`; the prefix is `<namespace>/`. Only requested
   keys are returned; other keys in the prefix are ignored.
 - Values stay raw strings; the loader parses each with the leaf's mandatory
@@ -455,7 +437,7 @@ once and applied deterministically.
 | `FormatTOML` | `go-toml/v2` | TOML documents | File documents; etcd leaves |
 | `FormatScalar` | `strconv` + `encoding.TextUnmarshaler` | One bare value: string, bool, int, uint, float, `time.Duration`, or any `TextUnmarshaler` | etcd leaves only |
 
-- **Files:** `file.Config.Format` is required and applies to the whole
+- **Files:** `FileConfig.Format` is required and applies to the whole
   document. There is no extension detection and no default. File leaves must
   not carry a `format` tag.
 - **Etcd:** every leaf must carry `conf:"format=..."`; a missing tag is
@@ -501,7 +483,9 @@ unexported `getterLeaf` marker (`*Getter[T]` does). For each exported field:
 - Pointers, maps, slices, and other non-struct kinds in a folder position are
   `ErrInvalidType` unless tagged `conf:"-"`.
 - Embedded structs use the embedded type name as their segment.
-- Unexported fields are ignored; a `conf` tag on one is `ErrInvalidType`.
+- Unexported fields are ignored, except a `Getter`: it can never be bound, so
+  an unexported `Getter` and a `conf` tag on any unexported field are
+  `ErrInvalidType`.
 
 Snake case splits on case transitions and keeps initialisms as one word:
 `Checkout` → `checkout`, `MaxRetries` → `max_retries`, `DBHost` → `db_host`,
@@ -530,10 +514,14 @@ Snake case splits on case transitions and keeps initialisms as one word:
 
 - The loader holds `atomic.Pointer[snapshot]`, where a snapshot is an immutable
   `map[string]any` of parsed values.
-- `Get` checks closed, loads the pointer, looks up the key, and type-asserts.
-  It performs no I/O and allocates nothing on a hit.
+- `Get` checks closed, loads the pointer, looks up the key, type-asserts, and
+  deep-copies reference values. It performs no I/O.
 - Per-key atomicity: a value is parsed before the snapshot is published, and a
   failed parse never replaces a good value.
+- A value that references other data (a map, slice, pointer, array, or a struct
+  with exported fields) is deep-copied on every read. Callers may mutate the
+  result without changing the snapshot; types that hide mutable state behind
+  unexported fields are copied shallowly.
 - Cross-key atomicity is deliberately absent: two `Get` calls can see different
   snapshots. A set of reads is not a transaction.
 - A deleted key is absent from the map. `Get` returns `ErrNotSet`;
@@ -577,11 +565,12 @@ low-cardinality class.
 | `conf.last_success.timestamp` | Gauge (`metrics.RecordGauge`) | `s` | `conf.source` |
 
 - `conf.source` is the provider's `Source()`: `"file"` or `"etcd"`.
-- `error.type` is `"config"`, `"parse"`, `"connect"`, `"watch"`, or
-  `"_OTHER"`.
-- The boot load is recorded once. Each applied watch batch, reset, or heartbeat
-  updates `conf.last_success.timestamp`; batches and resets also record duration
-  and count. Heartbeats do not increment the counter.
+- `error.type` is `"config"`, `"key"`, `"parse"`, `"connect"`, `"watch"`, or
+  `"_OTHER"`. `"key"` reports a missing or unknown key at boot.
+- The boot load is recorded once. Successful batches, resets, and heartbeats
+  update `conf.last_success.timestamp`. Batches, resets, parse failures, and
+  watch disconnects record duration and count; heartbeats do not, and failures
+  do not update the timestamp.
 - No key, value, revision, endpoint, namespace, or format appears in a metric
   attribute.
 - A nil metrics client falls back to `metrics.Default()`, read per operation.
@@ -611,33 +600,33 @@ Use `logs.Logger`, falling back to `logs.Default()`.
 
 ## Code Style
 
-Follow `go-best-practices` and the sibling modules.
+Follow the repository Go design rules in `AGENTS.md` and the sibling modules.
 
 ```go
-// Config configures the file provider. Both fields are required; there is no
+// FileConfig configures a file source. Both fields are required; there is no
 // extension detection and no default format.
-type Config struct {
+type FileConfig struct {
 	// Path is the config file path.
 	Path string
 	// Format is the document format: YAML, JSON, or TOML.
-	Format conf.Format
+	Format Format
 }
 
-func (c Config) Validate() error {
+func (c FileConfig) Validate() error {
 	var errs []error
 	if c.Path == "" {
-		errs = append(errs, conf.ErrInvalidConfig)
+		errs = append(errs, ErrInvalidConfig)
 	}
 	switch c.Format {
-	case conf.FormatYAML, conf.FormatJSON, conf.FormatTOML:
+	case FormatYAML, FormatJSON, FormatTOML:
 	default:
-		errs = append(errs, conf.ErrInvalidFormat)
+		errs = append(errs, ErrInvalidFormat)
 	}
 	return errors.Join(errs...)
 }
 
-// Parse implements conf.Formatter. It decodes a raw file value with the
-// document format and rejects per-leaf format tags.
+// Parse implements the internal core.Formatter. It decodes a raw file value
+// with the document format and rejects per-leaf format tags.
 func (p *Provider) Parse(raw string, t reflect.Type) (any, error) {
 	// YAML and JSON decode directly. TOML tries the document as a table,
 	// then falls back to a synthetic "v = ..." document for scalar and
@@ -646,10 +635,10 @@ func (p *Provider) Parse(raw string, t reflect.Type) (any, error) {
 ```
 
 ```go
-// Config configures the etcd provider. Build it from environment variables;
-// the provider never reads them itself. The value format is not here: every
-// leaf declares its own format.
-type Config struct {
+// EtcdConfig configures an etcd source. Build it from environment variables;
+// the source never reads them itself. The value format is not here: every leaf
+// declares its own format.
+type EtcdConfig struct {
 	// Endpoint is the etcd host:port. Required.
 	Endpoint string
 	// Username and Password are optional; set both or neither.
@@ -664,13 +653,13 @@ type Config struct {
 }
 ```
 
-- Error strings start with `conf:` in the root and `etcd:`/`file:` in the
-  providers.
+- Internal providers wrap the root sentinels, so their error strings start with
+  the sentinel's `conf:` prefix; provider-specific context follows it.
 - Package comments live only in each package's `doc.go`; no duplicate comment
   in the main file.
 - Doc comments on every exported declaration and field.
-- No mockey, no `//go:noinline`, no exported provider interface beyond
-  `Provider`/`Watcher`/`Formatter`.
+- No mockey, no `//go:noinline`. `Provider`, `Watcher`, `Formatter`, and
+  `Event` are internal to `internal/core`; `Source` is the only public seam.
 
 ## Testing Strategy
 
@@ -689,6 +678,8 @@ type Config struct {
     an unknown format is `ErrInvalidFormat`; `FormatScalar` handles string,
     bool, ints, floats, `time.Duration`, and `TextUnmarshaler`; an unsupported
     target is `ErrInvalidType`.
+  - **Formatter validation:** a wrong result type and nil for a non-nilable
+    target fail boot and watch updates; nil for a nilable target is accepted.
   - **Custom unmarshalers:** a type with `UnmarshalJSON` keeps its JSON
     behavior through a JSON file; the same for `UnmarshalYAML` and
     `UnmarshalTOML`; a `TextUnmarshaler` works under all three; a large JSON
@@ -696,8 +687,8 @@ type Config struct {
   - **File provider:** YAML, JSON, and TOML documents; a missing `Path` or
     `Format`; `FormatScalar` rejected; nested values, `time.Duration`,
     `net.IP`, a custom `TextUnmarshaler`, a `Getter` holding a struct, missing
-    keys, unknown keys, a value that does not decode, `Parse()`, and
-    `Source()`.
+    keys, unknown keys, a value that does not decode, a trailing JSON or YAML
+    document, `Parse()`, and `Source()`.
   - **Etcd provider integration:** boot loads every key; a missing key fails; a
     `PUT` is visible in under 1s; a `DELETE` yields `ErrNotSet` / the default; a
     bad value keeps last good and sets `StateDegraded`; a compaction triggers a
@@ -707,6 +698,9 @@ type Config struct {
     `Close`.
   - **Atomicity:** concurrent `Get` during reloads under `-race`; no read
     returns a partially decoded value; two keys may span snapshots.
+  - **Copy-on-read:** maps, slices, pointers, arrays, nested exported fields,
+    shared pointers, cycles, and nil/empty containers are isolated from the
+    snapshot.
   - **Lifecycle:** `Close` is idempotent; `Get` → `ErrClosed`;
     `GetWithDefault` → default; `State` → `StateClosed`; a zero `Getter`
     returns `ErrUnbound`.
@@ -715,10 +709,11 @@ type Config struct {
     or value on a metric or span.
   - **Golden keys:** a checked-in key set per fixture struct under `testdata/`
     fails on a field rename or a dropped tag.
-- `example_test.go` in each package: runnable file examples with `// Output:`,
-  and compile-only etcd examples.
+- `conf/example_test.go` has a runnable file example with `// Output:` and a
+  compile-only etcd example. Internal packages are exempt.
 - `integration_test.go` is the only file in a package using a real etcd; it
-  calls `t.Skip` when `CONF_ETCD_ENDPOINT` is unset.
+  calls `t.Skip` when `CONF_ETCD_ENDPOINT` is unset. CI sets the variable and
+  fails if the tests skip.
 - Coverage: every exported function and each table row above. No numeric
   coverage gate.
 
@@ -729,21 +724,24 @@ type Config struct {
   exactly as in the Telemetry Contract; keep `go test ./...` hermetic.
 - **Ask first:** any new dependency; any change to a metric or span name, unit,
   instrument, or attribute; exporting API beyond Public API; changing CI or
-  `release.yml`; adding `etcd.Config` fields.
+  `release.yml`; adding `EtcdConfig` fields.
 - **Never:** load, store, or log a config value; record an unbounded value as a
   metric attribute; use mockey or `//go:noinline`; keep `confloader`; reuse a
   version that proxy.golang.org already has.
 
 ## Success Criteria
 
-- [ ] `conf/` exists with `doc.go` and both providers; every Command passes;
-      `confloader/` is deleted; `go.work` and `LAX_MODULES` are updated; the
-      strict lint and gostyle checks report zero findings.
-- [ ] `file.Config` requires both `Path` and `Format`; YAML, JSON, and TOML
+- [ ] `conf/` exists with `doc.go` and internal file/etcd providers; every
+      Command passes; `confloader/` is deleted; `go.work` and `LAX_MODULES` are
+      updated; the strict lint, sdkcheck, and otelcheck checks report zero findings.
+- [ ] `FileConfig` requires both `Path` and `Format`; YAML, JSON, and TOML
       documents load, including `time.Duration`, `net.IP`, and
       `TextUnmarshaler` values; `FormatScalar` is rejected for files.
-- [ ] The file provider implements `Formatter.Parse` and decodes raw values
-      with `Config.Format`; a `format` tag on a file-loaded leaf is
+- [ ] `Source`, `File`, and `Etcd` are the only public provider seam; provider
+      implementations are under `internal/providers` and cannot be imported by
+      users.
+- [ ] The file provider implements the internal `Formatter.Parse` and decodes
+      raw values with `Format`; a `format` tag on a file-loaded leaf is
       `ErrInvalidTag`; a TOML scalar leaf and a TOML table leaf both load.
 - [ ] Every etcd leaf requires a `format=` tag; a missing tag is
       `ErrMissingFormat`; an unknown format is `ErrInvalidFormat`.
@@ -760,7 +758,9 @@ type Config struct {
       visible in under 1s; a `DELETE` yields `ErrNotSet` / the default; a bad
       value keeps last good and sets `StateDegraded`; a compaction resync
       recovers to `StateLive`.
-- [ ] Concurrent reads during reloads pass `-race`, and no read is partial.
+- [ ] Concurrent reads during reloads pass `-race`, no read is partial, and a
+      returned map, slice, or pointer can be mutated without touching the
+      snapshot.
 - [ ] `Close` is idempotent; `Get` → `ErrClosed`; `GetWithDefault` → default;
       `State` → `StateClosed`; a zero `Getter` returns `ErrUnbound`.
 - [ ] Telemetry contract tests assert every metric and span name, unit,
@@ -768,9 +768,8 @@ type Config struct {
 - [ ] The golden-key test fails on a field rename or a dropped tag.
 - [ ] `go test ./...` is hermetic; the etcd integration tests skip without
       `CONF_ETCD_ENDPOINT`.
-- [ ] `conf/doc.go`, `conf/providers/file/doc.go`, and
-      `conf/providers/etcd/doc.go` follow the house format, and
-      `conf/README.md` is a quickstart.
+- [ ] `conf/doc.go` follows the house format; internal provider package docs
+      exist, and `conf/README.md` is a quickstart.
 
 ## Open Questions
 

@@ -3,6 +3,7 @@ package conf
 import (
 	"context"
 	"errors"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
@@ -64,6 +65,33 @@ func TestWatchParseFailure(t *testing.T) {
 	}
 }
 
+func TestWatchFormatterWrongType(t *testing.T) {
+	ch := make(chan Event, 1)
+	p := &fakeFormatterWatcher{
+		fakeWatcher: &fakeWatcher{
+			fakeProvider: &fakeProvider{values: map[string]string{"checkouts/ttl": "30s"}, rev: 42},
+			ch:           ch,
+		},
+		parse: func(raw string, _ reflect.Type) (any, error) {
+			if raw == "30s" {
+				return 30 * time.Second, nil
+			}
+			return "wrong", nil
+		},
+	}
+	loader, err := New[fileConfig](t.Context(), testSource(p))
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	t.Cleanup(func() { _ = loader.Close() })
+
+	ch <- Event{Key: "checkouts/ttl", Value: "anything"}
+	waitFor(t, func() bool { return loader.State() == StateDegraded })
+	if got := loader.Data().Checkout.Timeout.GetWithDefault(0); got != 30*time.Second {
+		t.Errorf("Timeout after bad formatter = %v, want 30s", got)
+	}
+}
+
 func TestWatchReset(t *testing.T) {
 	ch := make(chan Event, 1)
 	loader, _ := newWatchLoader(t, ch)
@@ -122,13 +150,64 @@ func TestWatchHeartbeat(t *testing.T) {
 	})
 }
 
+func TestWatchEventClearsProviderDegraded(t *testing.T) {
+	tests := []struct {
+		name  string
+		event Event
+	}{
+		{name: "unknown put", event: Event{Key: "other/key", Value: "x"}},
+		{name: "unknown delete", event: Event{Key: "other/key", Deleted: true}},
+		{name: "reset", event: Event{Reset: map[string]string{"toggle_switch": "true"}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ch := make(chan Event, 2)
+			loader, _ := newWatchLoader(t, ch)
+
+			ch <- Event{Err: errors.New("watch down")}
+			waitFor(t, func() bool { return loader.State() == StateDegraded })
+
+			ch <- tt.event
+			waitFor(t, func() bool { return loader.State() == StateLive })
+		})
+	}
+}
+
+func TestWatchOutlivesContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	ch := make(chan Event, 1)
+	p := &fakeWatcher{
+		fakeProvider: &fakeProvider{values: validValues(), rev: 42},
+		ch:           ch,
+	}
+	loader, err := New[testConfig](ctx, testSource(p))
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	t.Cleanup(func() { _ = loader.Close() })
+
+	cancel()
+	ch <- Event{Key: "toggle_switch", Value: "false"}
+	waitFor(t, func() bool {
+		return !loader.Data().KillSwitch.GetWithDefault(true)
+	})
+}
+
+func TestWatchChannelClose(t *testing.T) {
+	ch := make(chan Event)
+	loader, _ := newWatchLoader(t, ch)
+
+	close(ch)
+	waitFor(t, func() bool { return loader.State() == StateDegraded })
+}
+
 func TestWatchStartError(t *testing.T) {
 	watchErr := errors.New("watch failed")
 	p := &fakeWatcher{
 		fakeProvider: &fakeProvider{values: validValues()},
 		watchErr:     watchErr,
 	}
-	_, err := New[testConfig](context.Background(), p)
+	_, err := New[testConfig](context.Background(), testSource(p))
 	if !errors.Is(err, watchErr) {
 		t.Fatalf("New() error = %v, want %v", err, watchErr)
 	}
@@ -182,7 +261,7 @@ func newWatchLoader(t *testing.T, ch chan Event) (*Loader[testConfig], *fakeWatc
 		fakeProvider: &fakeProvider{values: validValues(), rev: 42},
 		ch:           ch,
 	}
-	loader, err := New[testConfig](context.Background(), p)
+	loader, err := New[testConfig](t.Context(), testSource(p))
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/fikrimohammad/go-servicekit/conf"
+	"github.com/fikrimohammad/go-servicekit/conf/internal/core"
 )
 
 // Config configures the etcd provider. The value format is not here: every
@@ -41,16 +41,16 @@ func (c Config) SetDefaults() Config {
 func (c Config) Validate() error {
 	var errs []error
 	if _, _, err := net.SplitHostPort(c.Endpoint); err != nil {
-		errs = append(errs, fmt.Errorf("%w: endpoint must be host:port", conf.ErrInvalidConfig))
+		errs = append(errs, fmt.Errorf("%w: endpoint must be host:port", core.ErrInvalidConfig))
 	}
 	if c.Namespace == "" ||
 		strings.HasPrefix(c.Namespace, "/") ||
 		strings.HasSuffix(c.Namespace, "/") ||
 		strings.Contains(c.Namespace, "//") {
-		errs = append(errs, fmt.Errorf("%w: namespace must be non-empty without slashes", conf.ErrInvalidConfig))
+		errs = append(errs, fmt.Errorf("%w: namespace must be non-empty without slashes", core.ErrInvalidConfig))
 	}
 	if (c.Username == "") != (c.Password == "") {
-		errs = append(errs, fmt.Errorf("%w: username and password must be set together", conf.ErrInvalidConfig))
+		errs = append(errs, fmt.Errorf("%w: username and password must be set together", core.ErrInvalidConfig))
 	}
 	return errors.Join(errs...)
 }

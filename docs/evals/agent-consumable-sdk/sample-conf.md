@@ -4,8 +4,7 @@
 
 Implement `loadDebug` in `loader_test.go` using the SDK's `conf` package.
 
-- Build a `conf.New[appConfig](ctx, p)`.
-- `fake` implements `conf.Provider`; it is the backend.
+- Build a `conf.New[appConfig](ctx, conf.File(conf.FileConfig{...}))`.
 - Read `Data().Debug.Get()` and return it.
 - Close the loader before returning.
 
@@ -30,7 +29,7 @@ another package.
 ## Grader checklist
 
 - [ ] Imports `github.com/fikrimohammad/go-servicekit/conf`.
-- [ ] Calls `conf.New[appConfig]` with the fake provider.
+- [ ] Calls `conf.New[appConfig]` with a `conf.File` source.
 - [ ] Reads through `Getter.Get`, not a raw map.
 - [ ] Calls `Close` on the loader.
 - [ ] Zero SDK-usage corrections.

@@ -4,9 +4,11 @@ import (
 	"context"
 	"maps"
 	"time"
+
+	confcore "github.com/fikrimohammad/go-servicekit/conf/internal/core"
 )
 
-func (c *loaderCore) consume(ctx context.Context, ch <-chan Event) {
+func (c *loaderCore) consume(ctx context.Context, ch <-chan confcore.Event) {
 	defer close(c.done)
 	for {
 		select {
@@ -22,18 +24,16 @@ func (c *loaderCore) consume(ctx context.Context, ch <-chan Event) {
 	}
 }
 
-func (c *loaderCore) apply(ctx context.Context, ev Event) {
+// apply applies the first set event kind; the remaining fields are ignored.
+func (c *loaderCore) apply(ctx context.Context, ev confcore.Event) {
 	switch {
 	case ev.Err != nil:
 		c.setProviderDegraded(true)
 		c.recordReload(ctx, ev.Revision, time.Now(), ev.Err, "watch")
 		c.loggerClient().Warn(ctx, "conf: watch disconnected", "conf.source", c.source, "error.type", "watch")
 	case ev.Heartbeat:
-		wasDegraded := c.clearProviderDegraded()
+		c.markProviderLive(ctx)
 		c.recordHeartbeat(ctx)
-		if wasDegraded {
-			c.loggerClient().Info(ctx, "conf: watch recovered", "conf.source", c.source)
-		}
 	case ev.Reset != nil:
 		c.applyReset(ctx, ev)
 	case ev.Deleted:
@@ -45,36 +45,37 @@ func (c *loaderCore) apply(ctx context.Context, ev Event) {
 
 func (c *loaderCore) applyPut(ctx context.Context, key, raw string, rev int64) {
 	start := time.Now()
+	// Any event proves the watch is alive, even for a key this loader does not
+	// own.
+	c.markProviderLive(ctx)
 	l, ok := c.leaf(key)
 	if !ok {
 		return
 	}
-	v, err := c.parse(raw, l)
+	v, err := parseLeaf(c.formatter, raw, l)
 	if err != nil {
 		c.markDegraded(key)
-		c.setProviderDegraded(false)
 		c.recordReload(ctx, rev, start, err, "parse")
 		c.loggerClient().Warn(ctx, "conf: reload failed", "conf.source", c.source, "key", key, "error.type", "parse")
 		return
 	}
 	c.update(func(values map[string]any) { values[key] = v })
 	c.clearDegraded(key)
-	c.setProviderDegraded(false)
 	c.recordReload(ctx, rev, start, nil, "")
 }
 
 func (c *loaderCore) applyDelete(ctx context.Context, key string, rev int64) {
 	start := time.Now()
+	c.markProviderLive(ctx)
 	if _, ok := c.leaf(key); !ok {
 		return
 	}
 	c.update(func(values map[string]any) { delete(values, key) })
 	c.clearDegraded(key)
-	c.setProviderDegraded(false)
 	c.recordReload(ctx, rev, start, nil, "")
 }
 
-func (c *loaderCore) applyReset(ctx context.Context, ev Event) {
+func (c *loaderCore) applyReset(ctx context.Context, ev confcore.Event) {
 	start := time.Now()
 	old := c.snapshot.Load()
 	next := make(map[string]any, len(c.leaves))
@@ -88,7 +89,7 @@ func (c *loaderCore) applyReset(ctx context.Context, ev Event) {
 			c.clearDegraded(key)
 			continue
 		}
-		v, err := c.parse(raw, l)
+		v, err := parseLeaf(c.formatter, raw, l)
 		if err != nil {
 			if parseErr == nil {
 				parseErr, badKey = err, key
@@ -105,7 +106,7 @@ func (c *loaderCore) applyReset(ctx context.Context, ev Event) {
 		c.clearDegraded(key)
 	}
 	c.snapshot.Store(&snapshot{values: next})
-	c.setProviderDegraded(false)
+	c.markProviderLive(ctx)
 
 	class := ""
 	if parseErr != nil {
@@ -129,4 +130,12 @@ func (c *loaderCore) update(fn func(map[string]any)) {
 func (c *loaderCore) leaf(key string) (leaf, bool) {
 	l, ok := c.leaves[key]
 	return l, ok
+}
+
+// markProviderLive clears the provider-level degradation after an event proves
+// the watch is alive, and logs the recovery once.
+func (c *loaderCore) markProviderLive(ctx context.Context) {
+	if c.clearProviderDegraded() {
+		c.loggerClient().Info(ctx, "conf: watch recovered", "conf.source", c.source)
+	}
 }

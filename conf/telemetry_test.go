@@ -124,6 +124,34 @@ func newTelemetry(t *testing.T) (*recordMetrics, *recordLogger, *tracetest.SpanR
 	}
 }
 
+func TestErrorClass(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{name: "nil", err: nil, want: ""},
+		{name: "config", err: ErrInvalidConfig, want: "config"},
+		{name: "tag", err: ErrInvalidTag, want: "config"},
+		{name: "type", err: ErrInvalidType, want: "config"},
+		{name: "duplicate key", err: ErrDuplicateKey, want: "config"},
+		{name: "format", err: ErrInvalidFormat, want: "config"},
+		{name: "missing format", err: ErrMissingFormat, want: "config"},
+		{name: "missing key", err: ErrMissingKey, want: "key"},
+		{name: "unknown key", err: ErrUnknownKey, want: "key"},
+		{name: "parse", err: ErrParse, want: "parse"},
+		{name: "connect", err: ErrConnect, want: "connect"},
+		{name: "other", err: errors.New("other"), want: "_OTHER"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := errorClass(tt.err); got != tt.want {
+				t.Errorf("errorClass(%v) = %q, want %q", tt.err, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestTelemetryLoad(t *testing.T) {
 	recorder := tracetest.NewSpanRecorder()
 	provider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder))
@@ -132,7 +160,7 @@ func TestTelemetryLoad(t *testing.T) {
 	lg := &recordLogger{}
 
 	p := &fakeProvider{values: validValues(), rev: 42}
-	loader, err := New[testConfig](context.Background(), p,
+	loader, err := New[testConfig](context.Background(), testSource(p),
 		WithMetrics(mc), WithTracer(tracer.Wrap(provider)), WithLogger(lg))
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
@@ -205,7 +233,7 @@ func TestTelemetryParseFailure(t *testing.T) {
 
 	ch := make(chan Event, 1)
 	p := &fakeWatcher{fakeProvider: &fakeProvider{values: validValues(), rev: 42}, ch: ch}
-	loader, err := New[testConfig](context.Background(), p,
+	loader, err := New[testConfig](context.Background(), testSource(p),
 		WithMetrics(mc), WithTracer(tracer.Wrap(provider)), WithLogger(lg))
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
@@ -227,6 +255,9 @@ func TestTelemetryParseFailure(t *testing.T) {
 	}
 	if reloadSpan == nil {
 		t.Fatal("conf.reload span not recorded")
+	}
+	if parent := reloadSpan.Parent(); parent.IsValid() {
+		t.Errorf("reload span parent = %v, want none; the load span has ended", parent.SpanID())
 	}
 	if reloadSpan.Status().Code != codes.Error {
 		t.Errorf("reload span status = %v, want Error", reloadSpan.Status().Code)
@@ -264,7 +295,7 @@ func TestTelemetryWatchError(t *testing.T) {
 
 	ch := make(chan Event, 1)
 	p := &fakeWatcher{fakeProvider: &fakeProvider{values: validValues()}, ch: ch}
-	loader, err := New[testConfig](context.Background(), p,
+	loader, err := New[testConfig](context.Background(), testSource(p),
 		WithMetrics(mc), WithTracer(tracer.Wrap(provider)), WithLogger(lg))
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
@@ -308,7 +339,7 @@ func TestTelemetryHeartbeat(t *testing.T) {
 
 	ch := make(chan Event, 1)
 	p := &fakeWatcher{fakeProvider: &fakeProvider{values: validValues()}, ch: ch}
-	loader, err := New[testConfig](context.Background(), p,
+	loader, err := New[testConfig](context.Background(), testSource(p),
 		WithMetrics(mc), WithTracer(tracer.Wrap(provider)), WithLogger(lg))
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
@@ -337,7 +368,7 @@ func TestTelemetryHeartbeat(t *testing.T) {
 func TestTelemetryCloseError(t *testing.T) {
 	_, lg, _, opts := newTelemetry(t)
 	p := &fakeProvider{values: validValues(), closeErr: errors.New("close failed")}
-	loader, err := New[testConfig](context.Background(), p, opts...)
+	loader, err := New[testConfig](context.Background(), testSource(p), opts...)
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}

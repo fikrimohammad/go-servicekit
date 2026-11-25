@@ -9,46 +9,34 @@ import (
 	"sync/atomic"
 	"time"
 
+	confcore "github.com/fikrimohammad/go-servicekit/conf/internal/core"
 	"github.com/fikrimohammad/go-servicekit/observability/logs"
 	"github.com/fikrimohammad/go-servicekit/observability/metrics"
 	"github.com/fikrimohammad/go-servicekit/observability/tracer"
 	"go.opentelemetry.io/otel/attribute"
 )
 
-// Provider is the storage contract. A Loader binds one Provider.
-type Provider interface {
-	// Source returns a stable, low-cardinality telemetry label: "file" or
-	// "etcd" for the built-in providers.
-	Source() string
-	// Load returns the raw value for each requested key. Missing keys are
-	// absent from the map. rev is opaque to the Loader and is passed back to
-	// Watch. Load is called once per Loader.
-	Load(ctx context.Context, keys []string) (map[string]string, int64, error)
-	// Close releases resources. It is idempotent and safe before a successful
-	// Load.
-	Close() error
-}
-
-// Watcher is a Provider that streams changes.
-type Watcher interface {
-	// Watch streams changes after rev. The channel closes only when ctx is
-	// done. The provider owns reconnect and resync.
-	Watch(ctx context.Context, rev int64) (<-chan Event, error)
-}
-
-// Formatter is a Provider that owns parsing for its values. The loader calls
-// Parse for every Load result and rejects per-leaf format tags. The file
-// provider implements it; the etcd provider does not.
-type Formatter interface {
-	// Parse decodes raw into a value of type t.
-	Parse(raw string, t reflect.Type) (any, error)
-}
-
 // getterLeaf is implemented by *Getter[T]. It lets the loader recognize,
 // bind, and type a leaf without matching type names.
 type getterLeaf interface {
 	bind(core func() (any, error))
 	target() reflect.Type
+}
+
+// isNilProvider reports whether p is nil or a typed nil that would panic when
+// its methods run.
+func isNilProvider(p confcore.Provider) bool {
+	if p == nil {
+		return true
+	}
+	v := reflect.ValueOf(p)
+	switch v.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map,
+		reflect.Pointer, reflect.Slice:
+		return v.IsNil()
+	default:
+		return false
+	}
 }
 
 type options struct {
@@ -91,16 +79,16 @@ type snapshot struct {
 	values map[string]any
 }
 
-// Loader binds one Provider to a struct of Getter fields.
+// Loader binds one Source to a struct of Getter fields. Create it with [New];
+// the zero value is not usable.
 type Loader[T any] struct {
-	*loaderCore
-
+	core *loaderCore
 	data T
 }
 
 type loaderCore struct {
-	provider  Provider
-	formatter Formatter
+	provider  confcore.Provider
+	formatter confcore.Formatter
 	source    string
 	metrics   metrics.Client
 	tracer    tracer.Client
@@ -124,16 +112,26 @@ type loaderCore struct {
 	closeErr  error
 }
 
-// New builds a Loader for T, loads the provider, and binds every Getter. T
-// must be a struct whose leaves are Getter fields.
-func New[T any](ctx context.Context, p Provider, opts ...Option) (loader *Loader[T], err error) {
+// New builds a Loader for T, loads the source, and binds every Getter. T must
+// be a struct whose leaves are Getter fields. Create a Source with [File] or
+// [Etcd].
+//
+// New takes ownership of the provider created by source. It closes that
+// provider when it returns an error, and [Loader.Close] closes it on success.
+// An etcd source is watched until [Loader.Close]: canceling ctx stops the boot
+// load but does not stop the watch.
+func New[T any](ctx context.Context, source Source, opts ...Option) (loader *Loader[T], err error) {
+	if source.err != nil {
+		return nil, source.err
+	}
+	if source.newProvider == nil {
+		return nil, ErrInvalidConfig
+	}
+
 	var zero T
 	tType := reflect.TypeFor[T]()
 	if tType.Kind() != reflect.Struct {
 		return nil, fmt.Errorf("%w: T must be a struct, got %T", ErrInvalidType, zero)
-	}
-	if p == nil {
-		return nil, ErrInvalidConfig
 	}
 
 	o := options{}
@@ -146,25 +144,37 @@ func New[T any](ctx context.Context, p Provider, opts ...Option) (loader *Loader
 		}
 	}
 
-	source := p.Source()
+	p := source.newProvider()
+	if isNilProvider(p) {
+		return nil, ErrInvalidConfig
+	}
+	owned := false
+	defer func() {
+		if !owned {
+			_ = p.Close()
+		}
+	}()
+
+	sourceName := p.Source()
 	mc := resolveMetrics(o.metrics)
 	tc := resolveTracer(o.tracer)
 	lg := resolveLogger(o.logger)
+	// The watch outlives the boot load. Keep the caller's values but not the
+	// load span, so later reload spans are not children of a finished span.
+	baseCtx := ctx
 	start := time.Now()
-	ctx, span := startLoadSpan(ctx, tc, source)
+	ctx, span := startLoadSpan(ctx, tc, sourceName)
 	defer func() {
 		endLoadSpan(span, err)
-		recordMetric(ctx, mc, source, start, err, errorClass(err))
+		recordMetric(ctx, mc, sourceName, start, err, errorClass(err))
 	}()
 
-	formatter, ownsFormat := p.(Formatter)
+	formatter, ownsFormat := p.(confcore.Formatter)
 	leaves, err := derive(tType, ownsFormat)
 	if err != nil {
-		_ = p.Close()
 		return nil, err
 	}
 	if len(leaves) == 0 {
-		_ = p.Close()
 		return nil, fmt.Errorf("%w: %s has no Getter fields", ErrInvalidType, tType)
 	}
 
@@ -175,7 +185,6 @@ func New[T any](ctx context.Context, p Provider, opts ...Option) (loader *Loader
 
 	raw, rev, err := p.Load(ctx, keys)
 	if err != nil {
-		_ = p.Close()
 		return nil, err
 	}
 	if rev != 0 {
@@ -189,22 +198,13 @@ func New[T any](ctx context.Context, p Provider, opts ...Option) (loader *Loader
 		}
 	}
 	if len(missing) > 0 {
-		_ = p.Close()
 		return nil, errors.Join(missing...)
-	}
-
-	parse := func(raw string, l leaf) (any, error) {
-		if formatter != nil {
-			return formatter.Parse(raw, l.typ)
-		}
-		return parseValue(raw, l.typ, l.format)
 	}
 
 	values := make(map[string]any, len(leaves))
 	for _, l := range leaves {
-		v, err := parse(raw[l.key], l)
+		v, err := parseLeaf(formatter, raw[l.key], l)
 		if err != nil {
-			_ = p.Close()
 			return nil, fmt.Errorf("%w: key %q: %w", ErrParse, l.key, err)
 		}
 		values[l.key] = v
@@ -218,11 +218,11 @@ func New[T any](ctx context.Context, p Provider, opts ...Option) (loader *Loader
 	core := &loaderCore{
 		provider:  p,
 		formatter: formatter,
-		source:    source,
+		source:    sourceName,
 		metrics:   o.metrics,
 		tracer:    o.tracer,
 		logger:    o.logger,
-		logCtx:    context.WithoutCancel(ctx),
+		logCtx:    context.WithoutCancel(baseCtx),
 		leaves:    leafMap,
 		degraded:  make(map[string]struct{}),
 		state:     StateLive,
@@ -238,7 +238,6 @@ func New[T any](ctx context.Context, p Provider, opts ...Option) (loader *Loader
 		}
 		binder, ok := reflect.TypeAssert[getterLeaf](fv.Addr())
 		if !ok {
-			_ = p.Close()
 			return nil, fmt.Errorf("%w: field %s cannot be bound", ErrInvalidType, l.field)
 		}
 		binder.bind(func() (any, error) { return core.get(key) })
@@ -246,17 +245,15 @@ func New[T any](ctx context.Context, p Provider, opts ...Option) (loader *Loader
 
 	data, ok := reflect.TypeAssert[T](dataVal)
 	if !ok {
-		_ = p.Close()
 		return nil, fmt.Errorf("%w: unexpected config struct type %s", ErrInvalidType, dataVal.Type())
 	}
-	loader = &Loader[T]{loaderCore: core, data: data}
+	loader = &Loader[T]{core: core, data: data}
 
-	if w, ok := p.(Watcher); ok {
-		watchCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
+	if w, ok := p.(confcore.Watcher); ok {
+		watchCtx, cancel := context.WithCancel(context.WithoutCancel(baseCtx))
 		ch, err := w.Watch(watchCtx, rev)
 		if err != nil {
 			cancel()
-			_ = p.Close()
 			return nil, err
 		}
 		core.cancel = cancel
@@ -264,12 +261,61 @@ func New[T any](ctx context.Context, p Provider, opts ...Option) (loader *Loader
 		go core.consume(watchCtx, ch)
 	}
 
-	lg.Info(ctx, "conf: loaded", "conf.source", source, "conf.revision", rev)
+	lg.Info(ctx, "conf: loaded", "conf.source", sourceName, "conf.revision", rev)
+	owned = true
 	return loader, nil
 }
 
-// Data returns the config struct with every Getter bound.
+// Data returns the config struct with every Getter bound. Each call returns a
+// copy of the struct; its Getters all read the loader's current snapshot, so a
+// copy taken before a reload still returns the latest values.
 func (l *Loader[T]) Data() T { return l.data }
+
+// State reports the loader's health and lifecycle state.
+func (l *Loader[T]) State() State { return l.core.State() }
+
+// Close stops the watch and closes the provider. It is idempotent. After
+// Close, Get returns ErrClosed and State returns StateClosed.
+func (l *Loader[T]) Close() error { return l.core.Close() }
+
+// parseLeaf decodes one raw value for l. A Formatter provider owns decoding;
+// otherwise the leaf's declared format does.
+func parseLeaf(formatter confcore.Formatter, raw string, l leaf) (any, error) {
+	if formatter == nil {
+		return confcore.ParseValue(raw, l.typ, confcore.Format(l.format))
+	}
+	v, err := formatter.Parse(raw, l.typ)
+	if err != nil {
+		return nil, err
+	}
+	if v == nil {
+		if isNilable(l.typ) {
+			return reflect.Zero(l.typ).Interface(), nil
+		}
+		return nil, fmt.Errorf("%w: formatter returned nil for %s", ErrInvalidType, l.typ)
+	}
+	rv := reflect.ValueOf(v)
+	if rv.Type() != l.typ {
+		if !rv.Type().AssignableTo(l.typ) {
+			return nil, fmt.Errorf("%w: formatter returned %T for %s", ErrInvalidType, v, l.typ)
+		}
+		// Normalize assignable-but-unnamed results so Get's exact type
+		// assertion sees the leaf's declared type.
+		v = rv.Convert(l.typ).Interface()
+	}
+	return v, nil
+}
+
+// isNilable reports whether values of t can be nil.
+func isNilable(t reflect.Type) bool {
+	switch t.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map,
+		reflect.Pointer, reflect.Slice:
+		return true
+	default:
+		return false
+	}
+}
 
 // State reports the loader's health and lifecycle state.
 func (c *loaderCore) State() State {
@@ -291,17 +337,10 @@ func (c *loaderCore) Close() error {
 		}
 		c.closeErr = c.provider.Close()
 		if c.closeErr != nil {
-			c.loggerClient().Error(c.logCtx, "conf: close failed", "error.type", "_OTHER")
+			c.loggerClient().Error(c.logCtx, "conf: close failed", "error.type", errorClass(c.closeErr))
 		}
 	})
 	return c.closeErr
-}
-
-func (c *loaderCore) parse(raw string, l leaf) (any, error) {
-	if c.formatter != nil {
-		return c.formatter.Parse(raw, l.typ)
-	}
-	return parseValue(raw, l.typ, l.format)
 }
 
 func (c *loaderCore) get(key string) (any, error) {

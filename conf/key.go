@@ -21,8 +21,8 @@ type leaf struct {
 	field  string
 }
 
-// derive walks t and returns its leaves. ownsFormat is true when the provider
-// implements Formatter; defaultFormat is then the provider's format.
+// derive walks t and returns its leaves. ownsFormat is true when the source
+// owns parsing; leaf format tags are then rejected.
 func derive(t reflect.Type, ownsFormat bool) ([]leaf, error) {
 	var leaves []leaf
 	seen := make(map[string]string)
@@ -38,7 +38,11 @@ func walk(t reflect.Type, path []string, index []int, ownsFormat bool, leaves *[
 		rawTag := field.Tag.Get("conf")
 
 		if field.PkgPath != "" {
-			if rawTag != "" && rawTag != "-" {
+			// An unexported Getter can never be bound, so fail instead of
+			// silently leaving it unbound at runtime. Any other unexported
+			// field is not config, except a tagged one, which is a mistake.
+			isGetter := reflect.PointerTo(field.Type).Implements(getterLeafType)
+			if isGetter || (rawTag != "" && rawTag != "-") {
 				return fmt.Errorf("%w: field %s is unexported", ErrInvalidType, field.Name)
 			}
 			continue

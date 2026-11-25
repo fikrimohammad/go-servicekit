@@ -131,6 +131,75 @@ jobs:
       - name: Tidy check
         run: go mod tidy -diff
 
+  etcd-integration:
+    name: etcd integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      # The upstream etcd image is distroless, so Docker's shell-form
+      # healthcheck cannot run; the step below polls the HTTP health endpoint.
+      etcd:
+        image: gcr.io/etcd-development/etcd:v3.7.1
+        env:
+          ETCD_ADVERTISE_CLIENT_URLS: http://127.0.0.1:2379
+          ETCD_LISTEN_CLIENT_URLS: http://0.0.0.0:2379
+        ports:
+          - 2379:2379
+    env:
+      CONF_ETCD_ENDPOINT: 127.0.0.1:2379
+    defaults:
+      run:
+        working-directory: conf
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: conf/go.sum
+
+      - name: Wait for etcd
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:2379/health >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::etcd did not become ready"
+          exit 1
+
+      - name: Run etcd integration tests
+        run: |
+          set -o pipefail
+          go test -count=1 -race -timeout 5m -run '^TestEtcdIntegration' -v ./... \
+            | tee "$RUNNER_TEMP/etcd-integration.log"
+
+      - name: Assert integration tests passed, not skipped
+        run: |
+          if [ ! -s "$RUNNER_TEMP/etcd-integration.log" ]; then
+            echo "::error::integration test log is missing or empty"
+            exit 1
+          fi
+          if grep -qE '^[[:space:]]*--- SKIP:' "$RUNNER_TEMP/etcd-integration.log"; then
+            echo "::error::an integration test or subtest was skipped"
+            exit 1
+          fi
+          # TestEtcdIntegration runs in conf and internal/providers/etcd.
+          count=$(grep -cE '^--- PASS: TestEtcdIntegration \(' "$RUNNER_TEMP/etcd-integration.log" || true)
+          count=${count:-0}
+          if [ "$count" -lt 2 ]; then
+            echo "::error::expected TestEtcdIntegration in 2 packages, found ${count}; it may have been skipped or removed"
+            exit 1
+          fi
+          for test in TestEtcdIntegrationCompaction TestEtcdIntegrationCloseStopsWatch; do
+            if ! grep -qE "^--- PASS: ${test} \(" "$RUNNER_TEMP/etcd-integration.log"; then
+              echo "::error::${test} did not pass; it may have been skipped"
+              exit 1
+            fi
+          done
+
   db-integration:
     name: db integration
     runs-on: ubuntu-latest

@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/fikrimohammad/go-servicekit/conf"
+	"github.com/fikrimohammad/go-servicekit/conf/internal/core"
 	"gopkg.in/yaml.v3"
 )
 
@@ -22,7 +22,7 @@ type rules struct {
 func TestLoadYAML(t *testing.T) {
 	data := "checkouts:\n  ttl: 30s\n  max_retry: 3\ntoggle_switch: true\n"
 	keys := []string{"checkouts/ttl", "checkouts/max_retry", "toggle_switch"}
-	values, p := loadValues(t, conf.FormatYAML, "app.yaml", data, keys)
+	values, p := loadValues(t, core.FormatYAML, "app.yaml", data, keys)
 
 	got, err := p.Parse(values["checkouts/ttl"], reflect.TypeFor[time.Duration]())
 	if err != nil || got != 30*time.Second {
@@ -41,7 +41,7 @@ func TestLoadYAML(t *testing.T) {
 func TestLoadJSON(t *testing.T) {
 	data := `{"checkouts":{"ttl":30,"account_id":9007199254740993},"toggle_switch":true}`
 	keys := []string{"checkouts/ttl", "checkouts/account_id", "toggle_switch"}
-	values, p := loadValues(t, conf.FormatJSON, "app.json", data, keys)
+	values, p := loadValues(t, core.FormatJSON, "app.json", data, keys)
 
 	if got := strings.TrimSpace(values["checkouts/account_id"]); got != "9007199254740993" {
 		t.Errorf("raw account_id = %q, want 9007199254740993", got)
@@ -59,7 +59,7 @@ func TestLoadJSON(t *testing.T) {
 func TestLoadTOML(t *testing.T) {
 	data := "[checkouts]\nttl = 30\nmax_retry = 3\n\n[toggle]\nenabled = true\n"
 	keys := []string{"checkouts/ttl", "checkouts/max_retry", "toggle/enabled"}
-	values, p := loadValues(t, conf.FormatTOML, "app.toml", data, keys)
+	values, p := loadValues(t, core.FormatTOML, "app.toml", data, keys)
 
 	got, err := p.Parse(values["checkouts/ttl"], reflect.TypeFor[int]())
 	if err != nil || got != 30 {
@@ -73,7 +73,7 @@ func TestLoadTOML(t *testing.T) {
 
 func TestLoadTOMLTableLeaf(t *testing.T) {
 	data := "[rules]\nmax = 3\n"
-	values, p := loadValues(t, conf.FormatTOML, "app.toml", data, []string{"rules"})
+	values, p := loadValues(t, core.FormatTOML, "app.toml", data, []string{"rules"})
 
 	got, err := p.Parse(values["rules"], reflect.TypeFor[rules]())
 	if err != nil {
@@ -86,7 +86,7 @@ func TestLoadTOMLTableLeaf(t *testing.T) {
 
 func TestLoadTOMLArrayLeaf(t *testing.T) {
 	data := "[limits]\nvalues = [1, 2]\n"
-	values, p := loadValues(t, conf.FormatTOML, "app.toml", data, []string{"limits/values"})
+	values, p := loadValues(t, core.FormatTOML, "app.toml", data, []string{"limits/values"})
 
 	got, err := p.Parse(values["limits/values"], reflect.TypeFor[[]int]())
 	if err != nil {
@@ -99,7 +99,7 @@ func TestLoadTOMLArrayLeaf(t *testing.T) {
 
 func TestLoadYAMLStructLeaf(t *testing.T) {
 	data := "rules:\n  max: 3\n"
-	values, p := loadValues(t, conf.FormatYAML, "app.yaml", data, []string{"rules"})
+	values, p := loadValues(t, core.FormatYAML, "app.yaml", data, []string{"rules"})
 
 	got, err := p.Parse(values["rules"], reflect.TypeFor[rules]())
 	if err != nil {
@@ -113,28 +113,28 @@ func TestLoadYAMLStructLeaf(t *testing.T) {
 func TestLoadUnknownKey(t *testing.T) {
 	tests := []struct {
 		name   string
-		format conf.Format
+		format core.Format
 		file   string
 		data   string
 		keys   []string
 	}{
 		{
 			name:   "yaml",
-			format: conf.FormatYAML,
+			format: core.FormatYAML,
 			file:   "app.yaml",
 			data:   "checkouts:\n  ttl: 30s\nextra: 1\n",
 			keys:   []string{"checkouts/ttl"},
 		},
 		{
 			name:   "json",
-			format: conf.FormatJSON,
+			format: core.FormatJSON,
 			file:   "app.json",
 			data:   `{"checkouts":{"ttl":30},"extra":1}`,
 			keys:   []string{"checkouts/ttl"},
 		},
 		{
 			name:   "toml",
-			format: conf.FormatTOML,
+			format: core.FormatTOML,
 			file:   "app.toml",
 			data:   "[checkouts]\nttl = 30\n[extra]\nx = 1\n",
 			keys:   []string{"checkouts/ttl"},
@@ -144,7 +144,7 @@ func TestLoadUnknownKey(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			path := writeTemp(t, tt.file, tt.data)
 			p := New(Config{Path: path, Format: tt.format})
-			if _, _, err := p.Load(context.Background(), tt.keys); !errors.Is(err, conf.ErrUnknownKey) {
+			if _, _, err := p.Load(context.Background(), tt.keys); !errors.Is(err, core.ErrUnknownKey) {
 				t.Errorf("Load() error = %v, want ErrUnknownKey", err)
 			}
 		})
@@ -153,7 +153,7 @@ func TestLoadUnknownKey(t *testing.T) {
 
 func TestLoadMissingKey(t *testing.T) {
 	data := "checkouts:\n  ttl: 30s\n"
-	values, _ := loadValues(t, conf.FormatYAML, "app.yaml", data, []string{"checkouts/ttl", "checkouts/max_retry"})
+	values, _ := loadValues(t, core.FormatYAML, "app.yaml", data, []string{"checkouts/ttl", "checkouts/max_retry"})
 	if _, ok := values["checkouts/max_retry"]; ok {
 		t.Error("missing key unexpectedly present")
 	}
@@ -162,35 +162,75 @@ func TestLoadMissingKey(t *testing.T) {
 func TestLoadMalformed(t *testing.T) {
 	tests := []struct {
 		name   string
-		format conf.Format
+		format core.Format
 		file   string
 		data   string
 	}{
-		{name: "yaml", format: conf.FormatYAML, file: "app.yaml", data: "not: [valid"},
-		{name: "json", format: conf.FormatJSON, file: "app.json", data: "{"},
-		{name: "toml", format: conf.FormatTOML, file: "app.toml", data: "x ="},
+		{name: "yaml", format: core.FormatYAML, file: "app.yaml", data: "not: [valid"},
+		{name: "json", format: core.FormatJSON, file: "app.json", data: "{"},
+		{name: "toml", format: core.FormatTOML, file: "app.toml", data: "x ="},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			path := writeTemp(t, tt.file, tt.data)
 			p := New(Config{Path: path, Format: tt.format})
-			if _, _, err := p.Load(context.Background(), nil); !errors.Is(err, conf.ErrParse) {
+			if _, _, err := p.Load(context.Background(), nil); !errors.Is(err, core.ErrParse) {
 				t.Errorf("Load() error = %v, want ErrParse", err)
 			}
 		})
 	}
 }
 
+func TestLoadTrailingDocument(t *testing.T) {
+	tests := []struct {
+		name   string
+		format core.Format
+		file   string
+		data   string
+	}{
+		{
+			name:   "json",
+			format: core.FormatJSON,
+			file:   "app.json",
+			data:   `{"checkouts":{"ttl":30}} {"extra":1}`,
+		},
+		{
+			name:   "yaml",
+			format: core.FormatYAML,
+			file:   "app.yaml",
+			data:   "checkouts:\n  ttl: 30s\n---\nextra: 1\n",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := writeTemp(t, tt.file, tt.data)
+			p := New(Config{Path: path, Format: tt.format})
+			if _, _, err := p.Load(context.Background(), []string{"checkouts/ttl"}); !errors.Is(err, core.ErrParse) {
+				t.Errorf("Load() error = %v, want ErrParse", err)
+			}
+		})
+	}
+}
+
+func TestLoadTrailingEmptyYAMLDocument(t *testing.T) {
+	data := "checkouts:\n  ttl: 30s\n---\n"
+	values, _ := loadValues(t, core.FormatYAML, "app.yaml", data, []string{"checkouts/ttl"})
+
+	if got := strings.TrimSpace(values["checkouts/ttl"]); got != "30s" {
+		t.Errorf("checkouts/ttl = %q, want 30s", got)
+	}
+}
+
 func TestLoadScalarFormat(t *testing.T) {
-	p := New(Config{Path: "app.yaml", Format: conf.FormatScalar})
-	if _, _, err := p.Load(context.Background(), nil); !errors.Is(err, conf.ErrInvalidFormat) {
+	p := New(Config{Path: "app.yaml", Format: core.FormatScalar})
+	if _, _, err := p.Load(context.Background(), nil); !errors.Is(err, core.ErrInvalidFormat) {
 		t.Errorf("Load() error = %v, want ErrInvalidFormat", err)
 	}
 }
 
 func TestLoadMissingFile(t *testing.T) {
-	p := New(Config{Path: filepath.Join(t.TempDir(), "missing.yaml"), Format: conf.FormatYAML})
-	if _, _, err := p.Load(context.Background(), nil); !errors.Is(err, conf.ErrInvalidConfig) {
+	p := New(Config{Path: filepath.Join(t.TempDir(), "missing.yaml"), Format: core.FormatYAML})
+	if _, _, err := p.Load(context.Background(), nil); !errors.Is(err, core.ErrInvalidConfig) {
 		t.Errorf("Load() error = %v, want ErrInvalidConfig", err)
 	}
 }
@@ -198,9 +238,27 @@ func TestLoadMissingFile(t *testing.T) {
 func TestLoadContextCanceled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	p := New(Config{Path: "app.yaml", Format: conf.FormatYAML})
+	p := New(Config{Path: "app.yaml", Format: core.FormatYAML})
 	if _, _, err := p.Load(ctx, nil); !errors.Is(err, context.Canceled) {
 		t.Errorf("Load() error = %v, want context.Canceled", err)
+	}
+}
+
+func TestParseInvalidFormat(t *testing.T) {
+	tests := []struct {
+		name   string
+		format core.Format
+	}{
+		{name: "empty", format: ""},
+		{name: "scalar", format: core.FormatScalar},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := New(Config{Format: tt.format})
+			if _, err := p.Parse("1", reflect.TypeFor[int]()); !errors.Is(err, core.ErrInvalidFormat) {
+				t.Errorf("Parse() error = %v, want ErrInvalidFormat", err)
+			}
+		})
 	}
 }
 
@@ -245,7 +303,7 @@ func (p *tomlPrice) UnmarshalTOML(data []byte) error {
 
 func TestParseCustomUnmarshalers(t *testing.T) {
 	t.Run("json", func(t *testing.T) {
-		values, p := loadValues(t, conf.FormatJSON, "app.json", `{"price":{"value":100}}`, []string{"price"})
+		values, p := loadValues(t, core.FormatJSON, "app.json", `{"price":{"value":100}}`, []string{"price"})
 		got, err := p.Parse(values["price"], reflect.TypeFor[jsonPrice]())
 		if err != nil {
 			t.Fatalf("Parse() error = %v", err)
@@ -256,7 +314,7 @@ func TestParseCustomUnmarshalers(t *testing.T) {
 	})
 
 	t.Run("yaml", func(t *testing.T) {
-		values, p := loadValues(t, conf.FormatYAML, "app.yaml", "price:\n  value: 100\n", []string{"price"})
+		values, p := loadValues(t, core.FormatYAML, "app.yaml", "price:\n  value: 100\n", []string{"price"})
 		got, err := p.Parse(values["price"], reflect.TypeFor[yamlPrice]())
 		if err != nil {
 			t.Fatalf("Parse() error = %v", err)
@@ -267,7 +325,7 @@ func TestParseCustomUnmarshalers(t *testing.T) {
 	})
 
 	t.Run("toml", func(t *testing.T) {
-		values, p := loadValues(t, conf.FormatTOML, "app.toml", "[price]\nvalue = 100\n", []string{"price"})
+		values, p := loadValues(t, core.FormatTOML, "app.toml", "[price]\nvalue = 100\n", []string{"price"})
 		got, err := p.Parse(values["price"], reflect.TypeFor[tomlPrice]())
 		if err != nil {
 			t.Fatalf("Parse() error = %v", err)
@@ -278,7 +336,7 @@ func TestParseCustomUnmarshalers(t *testing.T) {
 	})
 }
 
-func loadValues(t *testing.T, format conf.Format, name, data string, keys []string) (map[string]string, *Provider) {
+func loadValues(t *testing.T, format core.Format, name, data string, keys []string) (map[string]string, *Provider) {
 	t.Helper()
 	path := writeTemp(t, name, data)
 	p := New(Config{Path: path, Format: format})

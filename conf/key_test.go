@@ -102,8 +102,13 @@ type unexportedFixture struct {
 	a Getter[int] `conf:"format=scalar"`
 }
 
+type unexportedUntaggedFixture struct {
+	a Getter[int]
+}
+
 func TestDerive(t *testing.T) {
 	_ = unexportedFixture{}.a
+	_ = unexportedUntaggedFixture{}.a
 	tests := []struct {
 		name       string
 		value      any
@@ -201,6 +206,11 @@ func TestDerive(t *testing.T) {
 		{
 			name:    "unexported getter",
 			value:   unexportedFixture{},
+			wantErr: ErrInvalidType,
+		},
+		{
+			name:    "unexported untagged getter",
+			value:   unexportedUntaggedFixture{},
 			wantErr: ErrInvalidType,
 		},
 	}

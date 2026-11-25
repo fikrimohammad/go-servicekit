@@ -1,12 +1,11 @@
 # conf
 
 Typed configuration with two lifetimes: a boot set loaded once from a file,
-and a hot set watched in etcd. One loader binds one provider. Reads never touch
+and a hot set watched in etcd. One loader binds one source. Reads never touch
 the network, boot is strict, and `State()` tells the truth.
 
 The detailed contract is in [SPEC-conf.md](../docs/specs/conf/SPEC-conf.md).
-Package-level docs are in `doc.go` for `conf`, `providers/file`, and
-`providers/etcd`.
+Package-level docs are in `doc.go`.
 
 ## Install
 
@@ -23,7 +22,7 @@ type Boot struct {
     } `conf:"folder=checkouts"`
 }
 
-loader, err := conf.New[Boot](ctx, file.New(file.Config{
+loader, err := conf.New[Boot](ctx, conf.File(conf.FileConfig{
     Path:   "disburseapp.prod.yaml",
     Format: conf.FormatYAML,
 }))
@@ -35,9 +34,9 @@ defer loader.Close()
 ttl := loader.Data().Checkout.TTL.GetWithDefault(30 * time.Second)
 ```
 
-`file.Config.Format` is required: `FormatYAML`, `FormatJSON`, or `FormatTOML`.
-There is no extension detection. The file provider implements
-`conf.Formatter`, so leaves must not carry a `format` tag.
+`conf.FileConfig.Format` is required: `FormatYAML`, `FormatJSON`, or
+`FormatTOML`. There is no extension detection. The file source owns the document
+format, so leaves must not carry a `format` tag.
 
 ## Etcd (hot config)
 
@@ -50,7 +49,7 @@ type Hot struct {
     Toggle conf.Getter[bool] `conf:"name=toggle_switch,format=scalar"`
 }
 
-loader, err := conf.New[Hot](ctx, etcd.New(etcd.Config{
+loader, err := conf.New[Hot](ctx, conf.Etcd(conf.EtcdConfig{
     Endpoint:  os.Getenv("ETCD_ENDPOINT"),
     Username:  os.Getenv("ETCD_USERNAME"),
     Password:  os.Getenv("ETCD_PASSWORD"),
@@ -83,18 +82,21 @@ a dropped tag.
 
 ## Lifecycle
 
-- `New` loads the provider once, requires every key to exist and decode, and
-  binds the Getters. A missing or malformed key fails construction.
-- An etcd provider then watches from the load revision. A bad update keeps the
-  last good value and moves `State()` to `Degraded`; a later good value returns
-  it to `Live`.
+- `New` loads the source once, requires every key to exist and decode, and
+  binds the Getters. A missing or malformed key fails construction. `New` takes
+  ownership of the provider created by the source and closes it on error.
+- An etcd source then watches from the load revision. The loader owns the
+  watch: canceling the context passed to `New` does not stop it; `Close` does.
+  A bad update keeps the last good value and moves `State()` to `Degraded`; a
+  later good value returns it to `Live`.
 - A deleted key is absent: `Get` returns `conf.ErrNotSet`, `GetWithDefault`
   returns its argument.
 - `Close` makes the loader unusable: `Get` returns `conf.ErrClosed`,
   `GetWithDefault` returns the default, `State()` is `Closed`. It is
   idempotent.
 - Reads are per-key atomic. Two reads can span a reload; a set of reads is not
-  a transaction.
+  a transaction. `Get` returns a deep copy, so mutating a map, slice, or pointer
+  result does not change the snapshot.
 
 ## Adding a hot key
 
